@@ -1,0 +1,130 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'index.js'
+      - 'package.json'
+      - 'index.html'
+      - 'Dockerfile'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 版本号：时间戳，无需手动维护 ─────────────────────────────────────
+      - name: Generate version tag
+        id: version
+        run: |
+          TAG="v$(date +'%Y%m%d%H%M%S')"
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}"     >> "$GITHUB_OUTPUT"
+
+      # ── 安装混淆工具 ──────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install javascript-obfuscator
+        run: npm install -g javascript-obfuscator
+
+      # ── 混淆 index.js ─────────────────────────────────────────────────────
+      - name: Obfuscate index.js
+        run: |
+          javascript-obfuscator index.js \
+            --output index.obf.js \
+            --compact true \
+            --self-defending true \
+            --disable-console-output false \
+            --identifier-names-generator hexadecimal \
+            --string-array true \
+            --string-array-encoding 'base64' \
+            --string-array-threshold 0.75 \
+            --rotate-string-array true \
+            --shuffle-string-array true \
+            --split-strings true \
+            --split-strings-chunk-length 10 \
+            --transform-object-keys true \
+            --unicode-escape-sequence false
+          mv index.obf.js dist-index.js
+
+      # ── 打包 Release zip ──────────────────────────────────────────────────
+      - name: Package release zip
+        run: |
+          mkdir -p release-pkg
+          cp dist-index.js  release-pkg/index.js
+          cp package.json   release-pkg/package.json
+          cp index.html     release-pkg/index.html
+          cd release-pkg
+          zip -q ../nodex-sb-${{ steps.version.outputs.version }}.zip ./*
+
+      # ── 创建/更新 GitHub Release ──────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          body: |
+            ## nodex-sb ${{ steps.version.outputs.tag }}
+
+            ### 安装方式
+
+            **一键脚本（推荐）**
+            ```bash
+            bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/nodex-sb/main/install.sh)
+            ```
+
+            **指定环境变量**
+            ```bash
+            UUID=xxx ARGO_DOMAIN=xxx ARGO_AUTH=xxx \
+              bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/nodex-sb/main/install.sh)
+            ```
+
+            **Docker**
+            ```bash
+            docker run -d --restart=always \
+              -e UUID=your-uuid \
+              -e ARGO_DOMAIN=your-domain \
+              -e ARGO_AUTH=your-token \
+              -p 3000:3000 \
+              ghcr.io/zaofengyue/nodex-sb:latest
+            ```
+          files: nodex-sb-${{ steps.version.outputs.version }}.zip
+          make_latest: true
+          overwrite: true
+
+      # ── 构建并推送 Docker 镜像到 GHCR ─────────────────────────────────────
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/zaofengyue/nodex-sb:latest
+            ghcr.io/zaofengyue/nodex-sb:${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
