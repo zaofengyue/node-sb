@@ -28,8 +28,7 @@ bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/instal
 指定环境变量（跳过交互）：
 
 ```bash
-UUID=your-uuid ARGO_DOMAIN=your.domain ARGO_AUTH="your-token" \
-  bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
+UUID=your-uuid ARGO_DOMAIN=your.domain ARGO_AUTH="your-token" bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
 ```
 
 安装完成后：
@@ -113,15 +112,6 @@ Docker 部署时挂载文件：
 
 ---
 
-## 开发调试
-
-拉取未混淆源码安装：
-
-```bash
-bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install-dev.sh)
-```
-
----
 
 ## License
 
