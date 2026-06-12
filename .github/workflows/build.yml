@@ -54,7 +54,6 @@ jobs:
             --string-array true \
             --string-array-encoding 'base64' \
             --string-array-threshold 0.75 \
-            --rotate-string-array true \
             --shuffle-string-array true \
             --split-strings true \
             --split-strings-chunk-length 10 \
