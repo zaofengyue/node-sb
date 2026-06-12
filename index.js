@@ -9,27 +9,23 @@ const PRESET_ARGO_AUTH   = '';
 // =============================================
 
 const { execSync, spawn } = require('child_process');
-const fs   = require('fs');
-const os   = require('os');
-const https = require('https');
-const http  = require('http');
+const fs     = require('fs');
+const os     = require('os');
+const https  = require('https');
+const http   = require('http');
 const crypto = require('crypto');
-const net   = require('net');
+const net    = require('net');
 
-const HOME             = process.env.HOME || '/tmp';
-const UUID_FILE        = `${HOME}/uuid.txt`;
-const CONFIG_FILE      = `${HOME}/sb-config.json`;
-const SB_DIR           = `${HOME}/sing-box`;
-const SB_BIN_PATH      = `${SB_DIR}/sing-box`;
-const CLOUDFLARED_BIN  = `${HOME}/cloudflared`;
+const HOME            = process.env.HOME || '/tmp';
+const UUID_FILE       = `${HOME}/uuid.txt`;
+const CONFIG_FILE     = `${HOME}/sb-config.json`;
+const SB_DIR          = `${HOME}/sing-box`;
+const SB_BIN_PATH     = `${SB_DIR}/sing-box`;
+const CLOUDFLARED_BIN = `${HOME}/cloudflared`;
 
 const WS_PATH_VMESS  = '/fengyue-vm';
 const WS_PATH_VLESS  = '/fengyue-vl';
 const WS_PATH_TROJAN = '/fengyue-tr';
-
-const V_VMESS_PORT  = 10000;
-const V_VLESS_PORT  = 10001;
-const V_TROJAN_PORT = 10002;
 
 const CF_PREFER_HOST = 'cdns.doon.eu.org';
 
@@ -77,46 +73,33 @@ async function downloadSingBox() {
   }
 
   const arch = os.arch();
-  const archMap = {
-    'x64'  : 'amd64',
-    'arm64': 'arm64',
-    'arm'  : 'armv7'
-  };
+  const archMap = { 'x64': 'amd64', 'arm64': 'arm64', 'arm': 'armv7' };
   const platform = archMap[arch] || 'amd64';
 
   console.log(`正在获取 sing-box 最新版本 (${platform})...`);
 
-  // 查最新 stable tag（跳过 pre-release）
-  let version = 'v1.11.6'; // 兜底版本
+  let version = 'v1.11.6';
   try {
-    const releaseData = await httpGet(
-      'https://api.github.com/repos/SagerNet/sing-box/releases'
-    );
-    if (releaseData) {
-      const releases = JSON.parse(releaseData);
+    const data = await httpGet('https://api.github.com/repos/SagerNet/sing-box/releases');
+    if (data) {
+      const releases = JSON.parse(data);
       const stable = releases.find(r => !r.prerelease && !r.draft);
       if (stable && stable.tag_name) version = stable.tag_name;
     }
   } catch {}
 
   console.log(`sing-box 版本: ${version}`);
-
-  // 文件名格式：sing-box-1.11.6-linux-amd64.tar.gz（去掉开头的 v）
-  const verNum = version.replace(/^v/, '');
+  const verNum  = version.replace(/^v/, '');
   const tarName = `sing-box-${verNum}-linux-${platform}.tar.gz`;
-  const url = `https://github.com/SagerNet/sing-box/releases/download/${version}/${tarName}`;
+  const url     = `https://github.com/SagerNet/sing-box/releases/download/${version}/${tarName}`;
 
   fs.mkdirSync(SB_DIR, { recursive: true });
-
   const tarPath = `${HOME}/sb.tar.gz`;
-  console.log(`正在下载 sing-box...`);
+  console.log('正在下载 sing-box...');
   download(url, tarPath);
-
-  // 解压：tar 包内有一层目录 sing-box-{ver}-linux-{arch}/sing-box
   execSync(`tar -xzf "${tarPath}" -C "${SB_DIR}" --strip-components=1`);
   execSync(`chmod +x "${SB_BIN_PATH}"`);
   fs.unlinkSync(tarPath);
-
   console.log('sing-box 下载完成');
   return SB_BIN_PATH;
 }
@@ -132,11 +115,7 @@ async function downloadCloudflared() {
   }
 
   const arch = os.arch();
-  const archMap = {
-    'x64'  : 'linux-amd64',
-    'arm64': 'linux-arm64',
-    'arm'  : 'linux-arm'
-  };
+  const archMap = { 'x64': 'linux-amd64', 'arm64': 'linux-arm64', 'arm': 'linux-arm' };
   const platform = archMap[arch] || 'linux-amd64';
 
   console.log(`正在下载 cloudflared (${platform})...`);
@@ -154,24 +133,25 @@ async function downloadCloudflared() {
 function startArgoTunnel(cfBin, argoPort, argoDomain, argoAuth) {
   return new Promise((resolve) => {
     let argoHost = '';
-    let args;
 
     if (argoDomain && argoAuth) {
       console.log('启动固定 Argo 隧道...');
-      args = ['tunnel', '--edge-ip-version', 'auto', '--no-autoupdate',
-              'run', '--token', argoAuth];
-      argoHost = argoDomain;
-      const cf = spawn(cfBin, args, { stdio: 'pipe' });
+      const cf = spawn(cfBin, [
+        'tunnel', '--edge-ip-version', 'auto', '--no-autoupdate',
+        'run', '--token', argoAuth
+      ], { stdio: 'pipe' });
       cf.on('error', err => console.error('cloudflared error:', err));
+      argoHost = argoDomain;
       setTimeout(() => resolve(argoHost), 3000);
     } else {
       console.log('启动临时 Argo 隧道...');
-      args = ['tunnel', '--edge-ip-version', 'auto', '--no-autoupdate',
-              '--url', `http://127.0.0.1:${argoPort}`];
-      const cf = spawn(cfBin, args, { stdio: 'pipe' });
+      const cf = spawn(cfBin, [
+        'tunnel', '--edge-ip-version', 'auto', '--no-autoupdate',
+        '--url', `http://127.0.0.1:${argoPort}`
+      ], { stdio: 'pipe' });
 
       cf.stderr.on('data', (data) => {
-        const str = data.toString();
+        const str   = data.toString();
         const match = str.match(/https:\/\/([a-z0-9-]+\.trycloudflare\.com)/);
         if (match && !argoHost) {
           argoHost = match[1];
@@ -179,14 +159,9 @@ function startArgoTunnel(cfBin, argoPort, argoDomain, argoAuth) {
           resolve(argoHost);
         }
       });
-
       cf.on('error', err => console.error('cloudflared error:', err));
-
       setTimeout(() => {
-        if (!argoHost) {
-          console.log('临时隧道域名获取超时');
-          resolve('');
-        }
+        if (!argoHost) { console.log('临时隧道域名获取超时'); resolve(''); }
       }, 30000);
     }
   });
@@ -210,7 +185,7 @@ async function main() {
 
   const TROJAN_PASS = UUID;
 
-  // 对外端口
+  // 对外端口（伪装页 + 订阅）
   const INBOUND_PORT = PRESET_PORT
     ? parseInt(PRESET_PORT)
     : process.env.PORT
@@ -223,87 +198,67 @@ async function main() {
   const ARGO_DOMAIN = PRESET_ARGO_DOMAIN || process.env.ARGO_DOMAIN || '';
   const ARGO_AUTH   = PRESET_ARGO_AUTH   || process.env.ARGO_AUTH   || '';
 
+  // Argo 端口：sing-box 三协议全部监听这个端口，按 WS 路径区分
   const ARGO_PORT = (ARGO_DOMAIN && ARGO_AUTH)
     ? parseInt(PRESET_ARGO_PORT || process.env.ARGO_PORT || '8001')
     : await getFreePort();
 
   // 节点名称
   const COUNTRY = await httpGet('https://ipinfo.io/country') ||
-                  await httpGet('https://ifconfig.co/country-iso') ||
-                  '';
+                  await httpGet('https://ifconfig.co/country-iso') || '';
 
   let NAME = PRESET_NAME || process.env.NAME || '';
   if (!NAME) {
     let ASN_ORG = await httpGet('https://ipinfo.io/org') ||
-                  await httpGet('https://ifconfig.co/org') ||
-                  '';
+                  await httpGet('https://ifconfig.co/org') || '';
     ASN_ORG = ASN_ORG
       .replace(/^AS\d+\s+/, '')
-      .replace(/,?\s*Inc\.?$/, '')
-      .replace(/,?\s*LLC\.?/g, '')
-      .replace(/,?\s*Ltd\.?/g, '')
-      .replace(/,?\s*Corp\.?/g, '')
-      .trim()
-      .substring(0, 20);
+      .replace(/,?\s*Inc\.?$/, '').replace(/,?\s*LLC\.?/g, '')
+      .replace(/,?\s*Ltd\.?/g, '').replace(/,?\s*Corp\.?/g, '')
+      .trim().substring(0, 20);
     NAME = COUNTRY && ASN_ORG ? `${COUNTRY}-${ASN_ORG}` :
            COUNTRY ? `${COUNTRY}-sb` : 'sb';
   }
 
   // ── sing-box 配置 ──────────────────────────
+  // 三个协议全部监听同一个 ARGO_PORT，按 WS 路径区分
+  // cloudflared 直接指向这个端口，Node.js 不做任何中间转发
   const config = {
-    log: {
-      level: 'warn',
-      timestamp: false
-    },
+    log: { level: 'warn', timestamp: false },
     inbounds: [
       {
         type: 'vmess',
         tag: 'vmess-in',
         listen: '127.0.0.1',
-        listen_port: V_VMESS_PORT,
+        listen_port: ARGO_PORT,
         users: [{ uuid: UUID, alterId: 0 }],
-        transport: {
-          type: 'ws',
-          path: WS_PATH_VMESS
-        }
+        transport: { type: 'ws', path: WS_PATH_VMESS }
       },
       {
         type: 'vless',
         tag: 'vless-in',
         listen: '127.0.0.1',
-        listen_port: V_VLESS_PORT,
+        listen_port: ARGO_PORT,
         users: [{ uuid: UUID, flow: '' }],
-        transport: {
-          type: 'ws',
-          path: WS_PATH_VLESS
-        }
+        transport: { type: 'ws', path: WS_PATH_VLESS }
       },
       {
         type: 'trojan',
         tag: 'trojan-in',
         listen: '127.0.0.1',
-        listen_port: V_TROJAN_PORT,
+        listen_port: ARGO_PORT,
         users: [{ password: TROJAN_PASS }],
-        transport: {
-          type: 'ws',
-          path: WS_PATH_TROJAN
-        }
+        transport: { type: 'ws', path: WS_PATH_TROJAN }
       }
     ],
-    outbounds: [
-      {
-        type: 'direct',
-        tag: 'direct'
-      }
-    ]
+    outbounds: [{ type: 'direct', tag: 'direct' }]
   };
 
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 
   // ── 启动 sing-box ──────────────────────────
   let sbBin = '';
-  const sbPaths = ['sing-box', '/usr/local/bin/sing-box', '/usr/bin/sing-box'];
-  for (const p of sbPaths) {
+  for (const p of ['sing-box', '/usr/local/bin/sing-box', '/usr/bin/sing-box']) {
     try { execSync(`which ${p} 2>/dev/null || test -x ${p}`); sbBin = p; break; } catch {}
   }
   if (!sbBin) sbBin = await downloadSingBox();
@@ -311,46 +266,10 @@ async function main() {
   const sbEnv = { ...process.env };
   delete sbEnv.PORT;
 
-  const sb = spawn(sbBin, ['run', '-c', CONFIG_FILE], {
-    stdio: 'inherit',
-    env: sbEnv
-  });
+  const sb = spawn(sbBin, ['run', '-c', CONFIG_FILE], { stdio: 'inherit', env: sbEnv });
   sb.on('exit', code => process.exit(code));
 
-  // ── Argo 转发服务（WS 反向代理）──────────────
-  const argoServer = http.createServer((req, res) => {
-    res.writeHead(400);
-    res.end('Bad Request');
-  });
-
-  argoServer.on('upgrade', (req, socket, head) => {
-    const path = req.url.split('?')[0];
-    let targetPort;
-
-    if (path === WS_PATH_VMESS)       targetPort = V_VMESS_PORT;
-    else if (path === WS_PATH_VLESS)  targetPort = V_VLESS_PORT;
-    else if (path === WS_PATH_TROJAN) targetPort = V_TROJAN_PORT;
-    else { socket.destroy(); return; }
-
-    const proxy = net.connect(targetPort, '127.0.0.1', () => {
-      proxy.write(
-        `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
-        Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n') +
-        '\r\n\r\n'
-      );
-      proxy.write(head);
-      socket.pipe(proxy);
-      proxy.pipe(socket);
-    });
-    proxy.on('error', () => socket.destroy());
-    socket.on('error', () => proxy.destroy());
-  });
-
-  argoServer.listen(ARGO_PORT, '127.0.0.1', () => {
-    console.log(`Argo 转发服务启动，端口 ${ARGO_PORT}`);
-  });
-
-  // ── HTTP 服务（伪装页 + 订阅）──────────────
+  // ── HTTP 服务（伪装页 + 订阅，仅 Node.js 保留这一个职责）──
   const INDEX_HTML = fs.existsSync('./index.html')
     ? fs.readFileSync('./index.html', 'utf8')
     : '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Welcome</title></head>' +
@@ -371,7 +290,7 @@ async function main() {
     console.log(`HTTP 服务启动，端口 ${INBOUND_PORT}`);
   });
 
-  // ── 启动 cloudflared ───────────────────────
+  // ── 启动 cloudflared，直接指向 sing-box 监听的 ARGO_PORT ──
   const cfBin    = await downloadCloudflared();
   const argoHost = await startArgoTunnel(cfBin, ARGO_PORT, ARGO_DOMAIN, ARGO_AUTH);
   const HOST     = argoHost || 'your-domain.com';
