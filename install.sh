@@ -6,7 +6,7 @@ RED='\033[0;31m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
-echo -e "${GREEN}========== nodex-sb 一键安装 ==========${NC}"
+echo -e "${GREEN}========== node-sb 一键安装 ==========${NC}"
 
 # ── 依赖检查 ────────────────────────────────────────────────────────────────
 if command -v curl >/dev/null 2>&1; then
@@ -30,8 +30,8 @@ if ! command -v unzip >/dev/null 2>&1; then
   exit 1
 fi
 
-REPO="zaofengyue/nodex-sb"
-APP_DIR="$HOME/nodex-sb"
+REPO="zaofengyue/node-sb"
+APP_DIR="$HOME/node-sb"
 mkdir -p "$APP_DIR" && cd "$APP_DIR"
 
 # ── 从 Releases 下载最新混淆包 ──────────────────────────────────────────────
@@ -50,9 +50,9 @@ if [ -z "$LATEST_ZIP_URL" ]; then
 fi
 
 echo -e "${GREEN}正在下载: $LATEST_ZIP_URL${NC}"
-$DL "$LATEST_ZIP_URL" $DL_O nodex-sb-release.zip
-unzip -qo nodex-sb-release.zip
-rm -f nodex-sb-release.zip
+$DL "$LATEST_ZIP_URL" $DL_O node-sb-release.zip
+unzip -qo node-sb-release.zip
+rm -f node-sb-release.zip
 echo -e "${GREEN}文件解压完成${NC}"
 
 # ── 环境变量收集 ─────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ mkdir -p "$LOCAL_BIN"
 
 cat > "$LOCAL_BIN/sb-sub" << 'SUBCMD'
 #!/bin/bash
-SUB_FILE="$HOME/nodex-sb/sub.txt"
+SUB_FILE="$HOME/node-sb/sub.txt"
 if [ -f "$SUB_FILE" ]; then
   cat "$SUB_FILE"
 else
@@ -112,8 +112,8 @@ chmod +x "$LOCAL_BIN/sb-sub"
 cat > "$LOCAL_BIN/sb-log" << LOGCMD
 #!/bin/bash
 LOG_FILE="$APP_DIR/run.log"
-if systemctl --user is-active nodex-sb >/dev/null 2>&1; then
-  journalctl --user -u nodex-sb -f
+if systemctl --user is-active node-sb >/dev/null 2>&1; then
+  journalctl --user -u node-sb -f
 elif [ -f "\$LOG_FILE" ]; then
   tail -f "\$LOG_FILE"
 else
@@ -124,23 +124,23 @@ chmod +x "$LOCAL_BIN/sb-log"
 
 cat > "$LOCAL_BIN/sb-del" << DELCMD
 #!/bin/bash
-echo "正在彻底删除 nodex-sb..."
+echo "正在彻底删除 node-sb..."
 
-systemctl --user stop nodex-sb 2>/dev/null || true
-systemctl --user disable nodex-sb 2>/dev/null || true
-rm -f "\$HOME/.config/systemd/user/nodex-sb.service"
+systemctl --user stop node-sb 2>/dev/null || true
+systemctl --user disable node-sb 2>/dev/null || true
+rm -f "\$HOME/.config/systemd/user/node-sb.service"
 systemctl --user daemon-reload 2>/dev/null || true
 
 if [ -f "$APP_DIR/nodex.pid" ]; then
   PID=\$(cat "$APP_DIR/nodex.pid")
   kill "\$PID" 2>/dev/null || true
 fi
-pkill -f "nodex-sb/index.js" 2>/dev/null || true
+pkill -f "node-sb/index.js" 2>/dev/null || true
 
 for RC_FILE in "\$HOME/.bashrc" "\$HOME/.profile" "\$HOME/.bash_profile" "\$HOME/.zshrc"; do
-  sed -i '/# nodex-sb PATH/d'      "\$RC_FILE" 2>/dev/null || true
-  sed -i '/# nodex-sb autostart/d' "\$RC_FILE" 2>/dev/null || true
-  sed -i '/nodex-sb/d'             "\$RC_FILE" 2>/dev/null || true
+  sed -i '/# node-sb PATH/d'      "\$RC_FILE" 2>/dev/null || true
+  sed -i '/# node-sb autostart/d' "\$RC_FILE" 2>/dev/null || true
+  sed -i '/node-sb/d'             "\$RC_FILE" 2>/dev/null || true
 done
 
 rm -rf "$APP_DIR"
@@ -157,7 +157,7 @@ if ! echo "$PATH" | grep -q "$LOCAL_BIN"; then
   for RC_FILE in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.bash_profile" "$HOME/.zshrc"; do
     if [ -f "$RC_FILE" ]; then
       echo "" >> "$RC_FILE"
-      echo "# nodex-sb PATH" >> "$RC_FILE"
+      echo "# node-sb PATH" >> "$RC_FILE"
       echo "export PATH=\"$LOCAL_BIN:\$PATH\"" >> "$RC_FILE"
     fi
   done
@@ -194,9 +194,9 @@ if $USER_SYSTEMD_OK; then
   SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
   mkdir -p "$SYSTEMD_USER_DIR"
 
-  cat > "$SYSTEMD_USER_DIR/nodex-sb.service" << EOF
+  cat > "$SYSTEMD_USER_DIR/node-sb.service" << EOF
 [Unit]
-Description=nodex-sb service
+Description=node-sb service
 After=network.target
 
 [Service]
@@ -220,8 +220,8 @@ WantedBy=default.target
 EOF
 
   systemctl --user daemon-reload
-  systemctl --user enable nodex-sb
-  systemctl --user start nodex-sb
+  systemctl --user enable node-sb
+  systemctl --user start node-sb
   loginctl enable-linger "$USER" 2>/dev/null || true
 
   echo ""
@@ -232,11 +232,11 @@ else
   bash "$WRAPPER"
 
   for RC_FILE in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.bash_profile" "$HOME/.zshrc"; do
-    if [ -f "$RC_FILE" ] && ! grep -q "# nodex-sb autostart" "$RC_FILE" 2>/dev/null; then
+    if [ -f "$RC_FILE" ] && ! grep -q "# node-sb autostart" "$RC_FILE" 2>/dev/null; then
       cat >> "$RC_FILE" << RCEOF
 
-# nodex-sb autostart
-if ! pgrep -f "nodex-sb/index.js" >/dev/null 2>&1; then
+# node-sb autostart
+if ! pgrep -f "node-sb/index.js" >/dev/null 2>&1; then
   bash "$WRAPPER" >/dev/null 2>&1
 fi
 RCEOF
