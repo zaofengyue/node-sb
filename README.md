@@ -4,16 +4,6 @@
 
 ---
 
-## 特性
-
-- 内核使用 sing-box，内存占用远低于 xray
-- 三协议并存：VMess、VLESS、Trojan，均走 WebSocket
-- Argo 隧道：支持临时隧道（自动域名）和固定隧道（自定义域名）
-- 订阅内容统一 base64，兼容主流客户端
-- 支持源码部署、Docker 部署、一键脚本部署，含开机自启
-
----
-
 ## 快速开始
 
 ### 一键脚本（推荐）
@@ -86,8 +76,6 @@ node index.js
 ```
 https://<argo-domain>/sub
 ```
-
-订阅内容同时写入 `~/nodex-sb/sub.txt`，可用 `sb-sub` 命令查看。
 
 ---
 
