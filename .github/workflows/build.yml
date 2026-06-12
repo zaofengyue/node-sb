@@ -83,8 +83,7 @@ jobs:
 
             **指定环境变量**
             ```bash
-            UUID=xxx ARGO_DOMAIN=xxx ARGO_AUTH="xxx" \
-              bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
+            UUID=your-uuid ARGO_DOMAIN=your.domain ARGO_AUTH="your-token" bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
             ```
 
             **Docker**
