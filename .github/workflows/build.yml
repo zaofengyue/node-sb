@@ -64,7 +64,7 @@ jobs:
           cp package.json   release-pkg/package.json
           cp index.html     release-pkg/index.html
           cd release-pkg
-          zip -q ../nodex-sb-${{ steps.version.outputs.version }}.zip ./*
+          zip -q ../node-sb-${{ steps.version.outputs.version }}.zip ./*
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -72,18 +72,19 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
           body: |
-            ## nodex-sb ${{ steps.version.outputs.tag }}
+            ## node-sb ${{ steps.version.outputs.tag }}
 
             ### 安装方式
 
             **一键脚本（推荐）**
             ```bash
-            bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/nodex-sb/main/install.sh)
+            bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
             ```
 
             **指定环境变量**
             ```bash
-            UUID=xxx ARGO_DOMAIN=xxx ARGO_AUTH="xxx" bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/nodex-sb/main/install.sh)
+            UUID=xxx ARGO_DOMAIN=xxx ARGO_AUTH="xxx" \
+              bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
             ```
 
             **Docker**
@@ -93,9 +94,9 @@ jobs:
               -e ARGO_DOMAIN=your-domain \
               -e ARGO_AUTH=your-token \
               -p 3000:3000 \
-              ghcr.io/zaofengyue/nodex-sb:latest
+              ghcr.io/zaofengyue/node-sb:latest
             ```
-          files: nodex-sb-${{ steps.version.outputs.version }}.zip
+          files: node-sb-${{ steps.version.outputs.version }}.zip
           make_latest: true
           overwrite: true
 
@@ -115,7 +116,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/zaofengyue/nodex-sb:latest
-            ghcr.io/zaofengyue/nodex-sb:${{ steps.version.outputs.version }}
+            ghcr.io/zaofengyue/node-sb:latest
+            ghcr.io/zaofengyue/node-sb:${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
