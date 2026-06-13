@@ -7,9 +7,9 @@ const PRESET_SUB            = '';
 const PRESET_ARGO_DOMAIN    = '';
 const PRESET_ARGO_AUTH      = '';
 // ── 可选协议，填写端口则启动对应协议，留空不启动 ──
-const PRESET_HY2_PORT       = '20303';
+const PRESET_HY2_PORT       = '';
 const PRESET_TUIC_PORT      = '';
-const PRESET_REALITY_PORT   = '20303';
+const PRESET_REALITY_PORT   = '';
 const PRESET_REALITY_DOMAIN = '';
 const PRESET_SS_PORT        = '';
 // =============================================
@@ -317,18 +317,32 @@ async function main() {
     }
   ];
 
+  // 端口冲突检测：同传输类型不能共用同一端口
+  // UDP 组：Hysteria2 和 TUIC 均为 UDP，端口相同则冲突
+  // TCP 组：Reality 和 Shadowsocks 均为 TCP，端口相同则冲突
+  // 跨类型（UDP vs TCP）端口相同完全没问题，可以共用
+  const hy2Active     = !!(HY2_PORT  && !(TUIC_PORT    && TUIC_PORT    === HY2_PORT));
+  const tuicActive    = !!(TUIC_PORT  && !(HY2_PORT     && HY2_PORT     === TUIC_PORT));
+  const realityActive = !!(REALITY_PORT && !(SS_PORT    && SS_PORT      === REALITY_PORT));
+  const ssActive      = !!(SS_PORT    && !(REALITY_PORT && REALITY_PORT === SS_PORT));
+
+  if (HY2_PORT && TUIC_PORT && HY2_PORT === TUIC_PORT)
+    console.warn(`警告: HY2_PORT 与 TUIC_PORT 相同 (${HY2_PORT})，均为 UDP 会冲突，TUIC 已跳过`);
+  if (REALITY_PORT && SS_PORT && REALITY_PORT === SS_PORT)
+    console.warn(`警告: REALITY_PORT 与 SS_PORT 相同 (${REALITY_PORT})，均为 TCP 会冲突，Shadowsocks 已跳过`);
+
   // 自签证书（Hysteria2 / TUIC 需要）
   let certPath = '', keyPath = '';
-  if (HY2_PORT || TUIC_PORT) {
+  if (hy2Active || tuicActive) {
     const certDir = `${HOME}/certs`;
     const cert = generateSelfSignedCert(certDir);
     certPath = cert.certPath;
     keyPath  = cert.keyPath;
   }
 
-  // Hysteria2（可选）
-  if (HY2_PORT) {
-    console.log(`启用 Hysteria2，端口 ${HY2_PORT}`);
+  // Hysteria2（可选，UDP）
+  if (hy2Active) {
+    console.log(`启用 Hysteria2，端口 ${HY2_PORT} (UDP)`);
     inbounds.push({
       type: 'hysteria2',
       tag: 'hy2-in',
@@ -343,9 +357,9 @@ async function main() {
     });
   }
 
-  // TUIC v5（可选）
-  if (TUIC_PORT) {
-    console.log(`启用 TUIC v5，端口 ${TUIC_PORT}`);
+  // TUIC v5（可选，UDP，可与 Hysteria2 端口号不同时共存）
+  if (tuicActive) {
+    console.log(`启用 TUIC v5，端口 ${TUIC_PORT} (UDP)`);
     inbounds.push({
       type: 'tuic',
       tag: 'tuic-in',
@@ -361,8 +375,8 @@ async function main() {
     });
   }
 
-  // VLESS Reality（可选）
-  if (REALITY_PORT) {
+  // VLESS Reality（可选，TCP，可与 Hysteria2/TUIC 共用端口号）
+  if (realityActive) {
     console.log(`启用 VLESS Reality，端口 ${REALITY_PORT}`);
     // 生成 Reality 密钥对
     let realityPrivKey = '', realityPubKey = '', realityShortId = '';
@@ -418,9 +432,9 @@ async function main() {
     global.REALITY_SHORT_ID = realityShortId;
   }
 
-  // Shadowsocks 2022（可选）
-  if (SS_PORT) {
-    console.log(`启用 Shadowsocks 2022，端口 ${SS_PORT}`);
+  // Shadowsocks 2022（可选，TCP，可与 Hysteria2/TUIC 共用端口号）
+  if (ssActive) {
+    console.log(`启用 Shadowsocks 2022，端口 ${SS_PORT} (TCP)`);
     inbounds.push({
       type: 'shadowsocks',
       tag: 'ss-in',
@@ -543,7 +557,7 @@ async function main() {
 
   // Argo 三协议
   const VMESS_OBJ = {
-    v: '2', ps: `${NAME}-vmess`, add: CF_PREFER_HOST, port: '443',
+    v: '2', ps: NAME, add: CF_PREFER_HOST, port: '443',
     id: UUID, aid: '0', scy: 'auto', net: 'ws', type: 'none',
     host: HOST, path: WS_PATH_VMESS, tls: 'tls', sni: HOST
   };
@@ -552,49 +566,49 @@ async function main() {
   links.push(
     `vless://${UUID}@${CF_PREFER_HOST}:443` +
     `?encryption=none&security=tls&sni=${HOST}&type=ws&host=${HOST}` +
-    `&path=${encodeURIComponent(WS_PATH_VLESS)}#${encodeURIComponent(NAME + '-vless')}`
+    `&path=${encodeURIComponent(WS_PATH_VLESS)}#${encodeURIComponent(NAME)}`
   );
 
   links.push(
     `trojan://${TROJAN_PASS}@${CF_PREFER_HOST}:443` +
     `?security=tls&sni=${HOST}&type=ws&host=${HOST}` +
-    `&path=${encodeURIComponent(WS_PATH_TROJAN)}#${encodeURIComponent(NAME + '-trojan')}`
+    `&path=${encodeURIComponent(WS_PATH_TROJAN)}#${encodeURIComponent(NAME)}`
   );
 
-  // Hysteria2（可选）
+  // Hysteria2（可选，UDP）
   if (HY2_PORT && PUBLIC_IP) {
     links.push(
       `hysteria2://${UUID}@${PUBLIC_IP}:${HY2_PORT}` +
-      `?insecure=1#${encodeURIComponent(NAME + '-hy2')}`
+      `?insecure=1#${encodeURIComponent(NAME)}`
     );
   }
 
-  // TUIC v5（可选）
+  // TUIC v5（可选，UDP，可与 Hysteria2 共用同一端口号）
   if (TUIC_PORT && PUBLIC_IP) {
     links.push(
       `tuic://${UUID}:${UUID}@${PUBLIC_IP}:${TUIC_PORT}` +
       `?congestion_control=bbr&alpn=h3&insecure=1` +
-      `#${encodeURIComponent(NAME + '-tuic')}`
+      `#${encodeURIComponent(NAME)}`
     );
   }
 
-  // VLESS Reality（可选）
+  // VLESS Reality（可选，TCP）
   if (REALITY_PORT && PUBLIC_IP && global.REALITY_PUB_KEY) {
     links.push(
       `vless://${UUID}@${PUBLIC_IP}:${REALITY_PORT}` +
       `?encryption=none&security=reality&sni=${REALITY_DOMAIN}` +
       `&fp=chrome&pbk=${global.REALITY_PUB_KEY}&sid=${global.REALITY_SHORT_ID}` +
       `&flow=xtls-rprx-vision&type=tcp` +
-      `#${encodeURIComponent(NAME + '-reality')}`
+      `#${encodeURIComponent(NAME)}`
     );
   }
 
-  // Shadowsocks 2022（可选）
+  // Shadowsocks 2022（可选，TCP，可与 Reality 共用同一端口号）
   if (SS_PORT && PUBLIC_IP) {
     const ssUserInfo = Buffer.from(`2022-blake3-aes-128-gcm:${SS_PASS}`).toString('base64');
     links.push(
       `ss://${ssUserInfo}@${PUBLIC_IP}:${SS_PORT}` +
-      `#${encodeURIComponent(NAME + '-ss')}`
+      `#${encodeURIComponent(NAME)}`
     );
   }
 
@@ -615,10 +629,10 @@ async function main() {
   console.log(`✓ VMess  + WS + Argo TLS`);
   console.log(`✓ VLESS  + WS + Argo TLS`);
   console.log(`✓ Trojan + WS + Argo TLS`);
-  if (HY2_PORT)     console.log(`✓ Hysteria2     端口 ${HY2_PORT}`);
-  if (TUIC_PORT)    console.log(`✓ TUIC v5       端口 ${TUIC_PORT}`);
-  if (REALITY_PORT) console.log(`✓ VLESS Reality 端口 ${REALITY_PORT}  PubKey: ${global.REALITY_PUB_KEY || '生成中'}`);
-  if (SS_PORT)      console.log(`✓ Shadowsocks   端口 ${SS_PORT}  密码: ${SS_PASS}`);
+  if (hy2Active)     console.log(`✓ Hysteria2     端口 ${HY2_PORT} (UDP)`);
+  if (tuicActive)    console.log(`✓ TUIC v5       端口 ${TUIC_PORT} (UDP)`);
+  if (realityActive) console.log(`✓ VLESS Reality 端口 ${REALITY_PORT} (TCP)  PubKey: ${global.REALITY_PUB_KEY || '生成中'}`);
+  if (ssActive)      console.log(`✓ Shadowsocks   端口 ${SS_PORT} (TCP)  密码: ${SS_PASS}`);
   console.log('========================================');
 }
 
