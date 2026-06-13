@@ -62,24 +62,57 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and Push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/node-sb:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Latest Release
-          files: node-sb.zip
           make_latest: true
+          files: node-sb.zip
           body: |
             ## node-sb
+
             下载 `node-sb.zip` 解压后上传到平台即可使用。
+
             包含文件：
             - `index.js`（已混淆）
             - `package.json`
             - `index.html`（伪装页，可自行替换）
+
+            ### 一键脚本安装
+            ```bash
+            bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
+            ```
+
+            ### 指定环境变量
+            ```bash
+            UUID=your-uuid ARGO_DOMAIN=your.domain ARGO_AUTH="your-token" \
+              bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
+            ```
+
+            ### 启用可选协议
+            ```bash
+            HY2_PORT=8443 TUIC_PORT=9443 REALITY_PORT=7443 SS_PORT=6443 \
+              bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
+            ```
+
+            ### Docker
+            ```bash
+            docker run -d --restart=always \
+              -e ARGO_DOMAIN=your.domain \
+              -e ARGO_AUTH="your-token" \
+              -p 3000:3000 \
+              ghcr.io/zaofengyue/node-sb:latest
+            ```
