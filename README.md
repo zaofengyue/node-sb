@@ -1,21 +1,9 @@
 # node-sb
 
-基于 Node.js + [sing-box](https://github.com/SagerNet/sing-box) 的一键代理节点部署工具，内存占用低，适合小内存机器。
-
-支持 VMess / VLESS / Trojan + WebSocket + Argo 隧道（必选），以及 Hysteria2 / TUIC v5 / VLESS Reality / Shadowsocks 2022（可选，按需启用）。
+基于 Node.js + [sing-box](https://github.com/SagerNet/sing-box) 的一键代理节点部署工具，支持 VMess / VLESS / Trojan + WebSocket + Argo 隧道，以及 Hysteria2 / TUIC v5 / VLESS Reality / Shadowsocks 2022。
 
 ---
 
-## 特性
-
-- 内核使用 sing-box，内存占用远低于 xray
-- 三协议（VMess、VLESS、Trojan）走 WebSocket + Argo 隧道，无需公网 IP
-- 可选四协议（Hysteria2、TUIC v5、VLESS Reality、Shadowsocks 2022），设置端口变量即启用
-- 订阅内容统一 base64，兼容主流客户端
-- 节点名称自动识别国家 + ASN
-- 支持源码部署、Docker 部署、一键脚本部署，含开机自启
-
----
 
 ## 快速开始
 
@@ -114,7 +102,7 @@ cd node-sb && node index.js
 | `UUID` | 节点 UUID，Trojan/Hysteria2/TUIC/Reality 密码同此 | 自动生成并持久化 |
 | `PORT` | HTTP 服务对外端口（伪装页 + 订阅） | 自动分配 |
 | `ARGO_PORT` | Argo 内部转发端口 | 固定隧道默认 8001，临时随机 |
-| `NAME` | 节点名称前缀 | 自动识别 国家-ASN |
+| `NAME` | 节点名称前缀 | 自动识别 |
 | `SUB` | 订阅路径 | `sub`（即 `/sub`） |
 | `ARGO_DOMAIN` | 固定隧道域名 | 空则使用临时隧道 |
 | `ARGO_AUTH` | 固定隧道 Token | 空则使用临时隧道 |
@@ -159,15 +147,7 @@ Docker 部署时挂载文件：
 
 ---
 
-## 开发调试
 
-拉取未混淆源码安装：
-
-```bash
-bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install-dev.sh)
-```
-
----
 
 ## License
 
