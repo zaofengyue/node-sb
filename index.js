@@ -27,6 +27,11 @@ const WS_PATH_VMESS  = '/fengyue-vm';
 const WS_PATH_VLESS  = '/fengyue-vl';
 const WS_PATH_TROJAN = '/fengyue-tr';
 
+// sing-box 三协议各自独立端口，监听 127.0.0.1
+const V_VMESS_PORT  = 10000;
+const V_VLESS_PORT  = 10001;
+const V_TROJAN_PORT = 10002;
+
 const CF_PREFER_HOST = 'cdns.doon.eu.org';
 
 // ──────────────────────────────────────────────
@@ -198,7 +203,7 @@ async function main() {
   const ARGO_DOMAIN = PRESET_ARGO_DOMAIN || process.env.ARGO_DOMAIN || '';
   const ARGO_AUTH   = PRESET_ARGO_AUTH   || process.env.ARGO_AUTH   || '';
 
-  // Argo 端口：sing-box 三协议全部监听这个端口，按 WS 路径区分
+  // Argo 转发端口：Node.js WS 反向代理监听此端口，cloudflared 指向它
   const ARGO_PORT = (ARGO_DOMAIN && ARGO_AUTH)
     ? parseInt(PRESET_ARGO_PORT || process.env.ARGO_PORT || '8001')
     : await getFreePort();
@@ -220,9 +225,7 @@ async function main() {
            COUNTRY ? `${COUNTRY}-sb` : 'sb';
   }
 
-  // ── sing-box 配置 ──────────────────────────
-  // 三个协议全部监听同一个 ARGO_PORT，按 WS 路径区分
-  // cloudflared 直接指向这个端口，Node.js 不做任何中间转发
+  // ── sing-box 配置：三协议各自独立端口 ────────
   const config = {
     log: { level: 'warn', timestamp: false },
     inbounds: [
@@ -230,7 +233,7 @@ async function main() {
         type: 'vmess',
         tag: 'vmess-in',
         listen: '127.0.0.1',
-        listen_port: ARGO_PORT,
+        listen_port: V_VMESS_PORT,
         users: [{ uuid: UUID, alterId: 0 }],
         transport: { type: 'ws', path: WS_PATH_VMESS }
       },
@@ -238,7 +241,7 @@ async function main() {
         type: 'vless',
         tag: 'vless-in',
         listen: '127.0.0.1',
-        listen_port: ARGO_PORT,
+        listen_port: V_VLESS_PORT,
         users: [{ uuid: UUID, flow: '' }],
         transport: { type: 'ws', path: WS_PATH_VLESS }
       },
@@ -246,7 +249,7 @@ async function main() {
         type: 'trojan',
         tag: 'trojan-in',
         listen: '127.0.0.1',
-        listen_port: ARGO_PORT,
+        listen_port: V_TROJAN_PORT,
         users: [{ password: TROJAN_PASS }],
         transport: { type: 'ws', path: WS_PATH_TROJAN }
       }
@@ -269,7 +272,41 @@ async function main() {
   const sb = spawn(sbBin, ['run', '-c', CONFIG_FILE], { stdio: 'inherit', env: sbEnv });
   sb.on('exit', code => process.exit(code));
 
-  // ── HTTP 服务（伪装页 + 订阅，仅 Node.js 保留这一个职责）──
+  // ── Node.js WS 反向代理：按路径分发到各协议端口 ──
+  // cloudflared → ARGO_PORT → Node.js → sing-box 各协议端口
+  const argoServer = http.createServer((req, res) => {
+    res.writeHead(400);
+    res.end('Bad Request');
+  });
+
+  argoServer.on('upgrade', (req, socket, head) => {
+    const path = req.url.split('?')[0];
+    let targetPort;
+
+    if (path === WS_PATH_VMESS)       targetPort = V_VMESS_PORT;
+    else if (path === WS_PATH_VLESS)  targetPort = V_VLESS_PORT;
+    else if (path === WS_PATH_TROJAN) targetPort = V_TROJAN_PORT;
+    else { socket.destroy(); return; }
+
+    const proxy = net.connect(targetPort, '127.0.0.1', () => {
+      proxy.write(
+        `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
+        Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n') +
+        '\r\n\r\n'
+      );
+      proxy.write(head);
+      socket.pipe(proxy);
+      proxy.pipe(socket);
+    });
+    proxy.on('error', () => socket.destroy());
+    socket.on('error', () => proxy.destroy());
+  });
+
+  argoServer.listen(ARGO_PORT, '127.0.0.1', () => {
+    console.log(`Argo 转发服务启动，端口 ${ARGO_PORT}`);
+  });
+
+  // ── HTTP 服务（伪装页 + 订阅）──────────────
   const INDEX_HTML = fs.existsSync('./index.html')
     ? fs.readFileSync('./index.html', 'utf8')
     : '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Welcome</title></head>' +
@@ -290,7 +327,7 @@ async function main() {
     console.log(`HTTP 服务启动，端口 ${INBOUND_PORT}`);
   });
 
-  // ── 启动 cloudflared，直接指向 sing-box 监听的 ARGO_PORT ──
+  // ── 启动 cloudflared，指向 Node.js WS 转发端口 ──
   const cfBin    = await downloadCloudflared();
   const argoHost = await startArgoTunnel(cfBin, ARGO_PORT, ARGO_DOMAIN, ARGO_AUTH);
   const HOST     = argoHost || 'your-domain.com';
