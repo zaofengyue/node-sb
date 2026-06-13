@@ -1,11 +1,17 @@
 // ========== 预留配置，留空则自动识别 ==========
-const PRESET_UUID        = '';
-const PRESET_PORT        = '';
-const PRESET_ARGO_PORT   = '';
-const PRESET_NAME        = '';
-const PRESET_SUB         = '';
-const PRESET_ARGO_DOMAIN = '';
-const PRESET_ARGO_AUTH   = '';
+const PRESET_UUID           = '';
+const PRESET_PORT           = '';
+const PRESET_ARGO_PORT      = '';
+const PRESET_NAME           = '';
+const PRESET_SUB            = '';
+const PRESET_ARGO_DOMAIN    = '';
+const PRESET_ARGO_AUTH      = '';
+// ── 可选协议，填写端口则启动对应协议，留空不启动 ──
+const PRESET_HY2_PORT       = '';
+const PRESET_TUIC_PORT      = '';
+const PRESET_REALITY_PORT   = '';
+const PRESET_REALITY_DOMAIN = '';
+const PRESET_SS_PORT        = '';
 // =============================================
 
 const { execSync, spawn } = require('child_process');
@@ -23,11 +29,12 @@ const SB_DIR          = `${HOME}/sing-box`;
 const SB_BIN_PATH     = `${SB_DIR}/sing-box`;
 const CLOUDFLARED_BIN = `${HOME}/cloudflared`;
 
+// Argo 三协议 WS 路径
 const WS_PATH_VMESS  = '/fengyue-vm';
 const WS_PATH_VLESS  = '/fengyue-vl';
 const WS_PATH_TROJAN = '/fengyue-tr';
 
-// sing-box 三协议各自独立端口，监听 127.0.0.1
+// Argo 三协议固定内部端口
 const V_VMESS_PORT  = 10000;
 const V_VLESS_PORT  = 10001;
 const V_TROJAN_PORT = 10002;
@@ -65,6 +72,34 @@ function download(url, dest) {
   try { execSync(`curl -sL "${url}" -o "${dest}"`); return; } catch {}
   try { execSync(`wget -q "${url}" -O "${dest}"`); return; } catch {}
   throw new Error(`下载失败: ${url}`);
+}
+
+// SS2022 密码：需要 base64(32字节)，从 UUID 派生
+function deriveSSPassword(uuid) {
+  const hex = uuid.replace(/-/g, '');
+  const buf = Buffer.from(hex.padEnd(64, '0').slice(0, 64), 'hex');
+  return buf.toString('base64');
+}
+
+// 生成自签证书（Hysteria2 / TUIC 用）
+function generateSelfSignedCert(dir) {
+  const keyPath  = `${dir}/key.pem`;
+  const certPath = `${dir}/cert.pem`;
+  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) return { keyPath, certPath };
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    execSync(
+      `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -days 3650 -nodes` +
+      ` -keyout "${keyPath}" -out "${certPath}"` +
+      ` -subj "/CN=bing.com/O=Microsoft/C=US"`,
+      { stdio: 'pipe' }
+    );
+  } catch {
+    // openssl 不可用时用 sing-box 自带证书占位，启动时会报警告但能运行
+    fs.writeFileSync(keyPath, '');
+    fs.writeFileSync(certPath, '');
+  }
+  return { keyPath, certPath };
 }
 
 // ──────────────────────────────────────────────
@@ -173,6 +208,16 @@ function startArgoTunnel(cfBin, argoPort, argoDomain, argoAuth) {
 }
 
 // ──────────────────────────────────────────────
+// 获取公网 IP
+// ──────────────────────────────────────────────
+
+async function getPublicIP() {
+  return await httpGet('https://ipinfo.io/ip') ||
+         await httpGet('https://ifconfig.co/ip') ||
+         '';
+}
+
+// ──────────────────────────────────────────────
 // 主流程
 // ──────────────────────────────────────────────
 
@@ -189,6 +234,7 @@ async function main() {
   }
 
   const TROJAN_PASS = UUID;
+  const SS_PASS     = deriveSSPassword(UUID);
 
   // 对外端口（伪装页 + 订阅）
   const INBOUND_PORT = PRESET_PORT
@@ -203,10 +249,22 @@ async function main() {
   const ARGO_DOMAIN = PRESET_ARGO_DOMAIN || process.env.ARGO_DOMAIN || '';
   const ARGO_AUTH   = PRESET_ARGO_AUTH   || process.env.ARGO_AUTH   || '';
 
-  // Argo 转发端口：Node.js WS 反向代理监听此端口，cloudflared 指向它
   const ARGO_PORT = (ARGO_DOMAIN && ARGO_AUTH)
     ? parseInt(PRESET_ARGO_PORT || process.env.ARGO_PORT || '8001')
     : await getFreePort();
+
+  // 可选协议端口（有值则启动，无值则跳过）
+  const HY2_PORT_RAW     = PRESET_HY2_PORT     || process.env.HY2_PORT     || '';
+  const TUIC_PORT_RAW    = PRESET_TUIC_PORT     || process.env.TUIC_PORT    || '';
+  const REALITY_PORT_RAW = PRESET_REALITY_PORT  || process.env.REALITY_PORT || '';
+  const SS_PORT_RAW      = PRESET_SS_PORT       || process.env.SS_PORT      || '';
+
+  const HY2_PORT     = HY2_PORT_RAW     ? parseInt(HY2_PORT_RAW)     : 0;
+  const TUIC_PORT    = TUIC_PORT_RAW    ? parseInt(TUIC_PORT_RAW)    : 0;
+  const REALITY_PORT = REALITY_PORT_RAW ? parseInt(REALITY_PORT_RAW) : 0;
+  const SS_PORT      = SS_PORT_RAW      ? parseInt(SS_PORT_RAW)      : 0;
+
+  const REALITY_DOMAIN = PRESET_REALITY_DOMAIN || process.env.REALITY_DOMAIN || 'addons.mozilla.org';
 
   // 节点名称
   const COUNTRY = await httpGet('https://ipinfo.io/country') ||
@@ -225,35 +283,157 @@ async function main() {
            COUNTRY ? `${COUNTRY}-sb` : 'sb';
   }
 
-  // ── sing-box 配置：三协议各自独立端口 ────────
+  // 公网 IP（可选协议订阅需要）
+  const PUBLIC_IP = (HY2_PORT || TUIC_PORT || REALITY_PORT || SS_PORT)
+    ? await getPublicIP()
+    : '';
+
+  // ── sing-box 配置 ──────────────────────────
+  const inbounds = [
+    // Argo 三协议，固定内部端口
+    {
+      type: 'vmess',
+      tag: 'vmess-in',
+      listen: '127.0.0.1',
+      listen_port: V_VMESS_PORT,
+      users: [{ uuid: UUID, alterId: 0 }],
+      transport: { type: 'ws', path: WS_PATH_VMESS }
+    },
+    {
+      type: 'vless',
+      tag: 'vless-in',
+      listen: '127.0.0.1',
+      listen_port: V_VLESS_PORT,
+      users: [{ uuid: UUID, flow: '' }],
+      transport: { type: 'ws', path: WS_PATH_VLESS }
+    },
+    {
+      type: 'trojan',
+      tag: 'trojan-in',
+      listen: '127.0.0.1',
+      listen_port: V_TROJAN_PORT,
+      users: [{ password: TROJAN_PASS }],
+      transport: { type: 'ws', path: WS_PATH_TROJAN }
+    }
+  ];
+
+  // 自签证书（Hysteria2 / TUIC 需要）
+  let certPath = '', keyPath = '';
+  if (HY2_PORT || TUIC_PORT) {
+    const certDir = `${HOME}/certs`;
+    const cert = generateSelfSignedCert(certDir);
+    certPath = cert.certPath;
+    keyPath  = cert.keyPath;
+  }
+
+  // Hysteria2（可选）
+  if (HY2_PORT) {
+    console.log(`启用 Hysteria2，端口 ${HY2_PORT}`);
+    inbounds.push({
+      type: 'hysteria2',
+      tag: 'hy2-in',
+      listen: '::',
+      listen_port: HY2_PORT,
+      users: [{ password: UUID }],
+      tls: {
+        enabled: true,
+        certificate_path: certPath,
+        key_path: keyPath
+      }
+    });
+  }
+
+  // TUIC v5（可选）
+  if (TUIC_PORT) {
+    console.log(`启用 TUIC v5，端口 ${TUIC_PORT}`);
+    inbounds.push({
+      type: 'tuic',
+      tag: 'tuic-in',
+      listen: '::',
+      listen_port: TUIC_PORT,
+      users: [{ uuid: UUID, password: UUID }],
+      congestion_control: 'bbr',
+      tls: {
+        enabled: true,
+        certificate_path: certPath,
+        key_path: keyPath
+      }
+    });
+  }
+
+  // VLESS Reality（可选）
+  if (REALITY_PORT) {
+    console.log(`启用 VLESS Reality，端口 ${REALITY_PORT}`);
+    // 生成 Reality 密钥对
+    let realityPrivKey = '', realityPubKey = '', realityShortId = '';
+    try {
+      const keyOut = execSync(`${SB_BIN_PATH || 'sing-box'} generate reality-keypair`, { encoding: 'utf8' });
+      const privMatch = keyOut.match(/PrivateKey:\s*(\S+)/);
+      const pubMatch  = keyOut.match(/PublicKey:\s*(\S+)/);
+      if (privMatch) realityPrivKey = privMatch[1];
+      if (pubMatch)  realityPubKey  = pubMatch[1];
+    } catch {
+      realityPrivKey = crypto.randomBytes(32).toString('base64url');
+      realityPubKey  = '';
+    }
+    realityShortId = crypto.randomBytes(4).toString('hex');
+
+    // 持久化 Reality 密钥（重启后 pubkey 不变，客户端无需重新配置）
+    const realityKeyFile = `${HOME}/reality-keys.json`;
+    if (fs.existsSync(realityKeyFile)) {
+      try {
+        const saved = JSON.parse(fs.readFileSync(realityKeyFile, 'utf8'));
+        realityPrivKey = saved.privKey || realityPrivKey;
+        realityPubKey  = saved.pubKey  || realityPubKey;
+        realityShortId = saved.shortId || realityShortId;
+      } catch {}
+    } else {
+      fs.writeFileSync(realityKeyFile, JSON.stringify({
+        privKey: realityPrivKey,
+        pubKey:  realityPubKey,
+        shortId: realityShortId
+      }));
+    }
+
+    inbounds.push({
+      type: 'vless',
+      tag: 'reality-in',
+      listen: '::',
+      listen_port: REALITY_PORT,
+      users: [{ uuid: UUID, flow: 'xtls-rprx-vision' }],
+      tls: {
+        enabled: true,
+        server_name: REALITY_DOMAIN,
+        reality: {
+          enabled: true,
+          handshake: { server: REALITY_DOMAIN, server_port: 443 },
+          private_key: realityPrivKey,
+          short_id: [realityShortId]
+        }
+      }
+    });
+
+    // 暴露 pubkey 供订阅生成
+    global.REALITY_PUB_KEY  = realityPubKey;
+    global.REALITY_SHORT_ID = realityShortId;
+  }
+
+  // Shadowsocks 2022（可选）
+  if (SS_PORT) {
+    console.log(`启用 Shadowsocks 2022，端口 ${SS_PORT}`);
+    inbounds.push({
+      type: 'shadowsocks',
+      tag: 'ss-in',
+      listen: '::',
+      listen_port: SS_PORT,
+      method: '2022-blake3-aes-128-gcm',
+      password: SS_PASS
+    });
+  }
+
   const config = {
     log: { level: 'warn', timestamp: false },
-    inbounds: [
-      {
-        type: 'vmess',
-        tag: 'vmess-in',
-        listen: '127.0.0.1',
-        listen_port: V_VMESS_PORT,
-        users: [{ uuid: UUID, alterId: 0 }],
-        transport: { type: 'ws', path: WS_PATH_VMESS }
-      },
-      {
-        type: 'vless',
-        tag: 'vless-in',
-        listen: '127.0.0.1',
-        listen_port: V_VLESS_PORT,
-        users: [{ uuid: UUID, flow: '' }],
-        transport: { type: 'ws', path: WS_PATH_VLESS }
-      },
-      {
-        type: 'trojan',
-        tag: 'trojan-in',
-        listen: '127.0.0.1',
-        listen_port: V_TROJAN_PORT,
-        users: [{ password: TROJAN_PASS }],
-        transport: { type: 'ws', path: WS_PATH_TROJAN }
-      }
-    ],
+    inbounds,
     outbounds: [{ type: 'direct', tag: 'direct' }]
   };
 
@@ -266,14 +446,41 @@ async function main() {
   }
   if (!sbBin) sbBin = await downloadSingBox();
 
+  // Reality 密钥生成依赖 sing-box 二进制，确保路径正确
+  if (REALITY_PORT && !global.REALITY_PUB_KEY) {
+    try {
+      const keyOut = execSync(`"${sbBin}" generate reality-keypair`, { encoding: 'utf8' });
+      const privMatch = keyOut.match(/PrivateKey:\s*(\S+)/);
+      const pubMatch  = keyOut.match(/PublicKey:\s*(\S+)/);
+      const realityKeyFile = `${HOME}/reality-keys.json`;
+      if (privMatch && pubMatch && !fs.existsSync(realityKeyFile)) {
+        const realityShortId = crypto.randomBytes(4).toString('hex');
+        fs.writeFileSync(realityKeyFile, JSON.stringify({
+          privKey: privMatch[1],
+          pubKey:  pubMatch[1],
+          shortId: realityShortId
+        }));
+        // 重写配置里的 reality inbound
+        const saved = JSON.parse(fs.readFileSync(realityKeyFile, 'utf8'));
+        const rIdx  = config.inbounds.findIndex(i => i.tag === 'reality-in');
+        if (rIdx >= 0) {
+          config.inbounds[rIdx].tls.reality.private_key  = saved.privKey;
+          config.inbounds[rIdx].tls.reality.short_id     = [saved.shortId];
+          global.REALITY_PUB_KEY  = saved.pubKey;
+          global.REALITY_SHORT_ID = saved.shortId;
+          fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+        }
+      }
+    } catch {}
+  }
+
   const sbEnv = { ...process.env };
   delete sbEnv.PORT;
 
   const sb = spawn(sbBin, ['run', '-c', CONFIG_FILE], { stdio: 'inherit', env: sbEnv });
   sb.on('exit', code => process.exit(code));
 
-  // ── Node.js WS 反向代理：按路径分发到各协议端口 ──
-  // cloudflared → ARGO_PORT → Node.js → sing-box 各协议端口
+  // ── Node.js WS 反向代理（Argo 三协议路径分发）──
   const argoServer = http.createServer((req, res) => {
     res.writeHead(400);
     res.end('Bad Request');
@@ -282,7 +489,6 @@ async function main() {
   argoServer.on('upgrade', (req, socket, head) => {
     const path = req.url.split('?')[0];
     let targetPort;
-
     if (path === WS_PATH_VMESS)       targetPort = V_VMESS_PORT;
     else if (path === WS_PATH_VLESS)  targetPort = V_VLESS_PORT;
     else if (path === WS_PATH_TROJAN) targetPort = V_TROJAN_PORT;
@@ -327,29 +533,72 @@ async function main() {
     console.log(`HTTP 服务启动，端口 ${INBOUND_PORT}`);
   });
 
-  // ── 启动 cloudflared，指向 Node.js WS 转发端口 ──
+  // ── 启动 cloudflared ───────────────────────
   const cfBin    = await downloadCloudflared();
   const argoHost = await startArgoTunnel(cfBin, ARGO_PORT, ARGO_DOMAIN, ARGO_AUTH);
   const HOST     = argoHost || 'your-domain.com';
 
   // ── 生成订阅链接 ───────────────────────────
+  const links = [];
+
+  // Argo 三协议
   const VMESS_OBJ = {
-    v: '2', ps: NAME, add: CF_PREFER_HOST, port: '443',
+    v: '2', ps: `${NAME}-vmess`, add: CF_PREFER_HOST, port: '443',
     id: UUID, aid: '0', scy: 'auto', net: 'ws', type: 'none',
     host: HOST, path: WS_PATH_VMESS, tls: 'tls', sni: HOST
   };
-  const VMESS_LINK = 'vmess://' + Buffer.from(JSON.stringify(VMESS_OBJ)).toString('base64');
+  links.push('vmess://' + Buffer.from(JSON.stringify(VMESS_OBJ)).toString('base64'));
 
-  const VLESS_LINK = `vless://${UUID}@${CF_PREFER_HOST}:443` +
+  links.push(
+    `vless://${UUID}@${CF_PREFER_HOST}:443` +
     `?encryption=none&security=tls&sni=${HOST}&type=ws&host=${HOST}` +
-    `&path=${encodeURIComponent(WS_PATH_VLESS)}#${encodeURIComponent(NAME)}`;
+    `&path=${encodeURIComponent(WS_PATH_VLESS)}#${encodeURIComponent(NAME + '-vless')}`
+  );
 
-  const TROJAN_LINK = `trojan://${TROJAN_PASS}@${CF_PREFER_HOST}:443` +
+  links.push(
+    `trojan://${TROJAN_PASS}@${CF_PREFER_HOST}:443` +
     `?security=tls&sni=${HOST}&type=ws&host=${HOST}` +
-    `&path=${encodeURIComponent(WS_PATH_TROJAN)}#${encodeURIComponent(NAME)}`;
+    `&path=${encodeURIComponent(WS_PATH_TROJAN)}#${encodeURIComponent(NAME + '-trojan')}`
+  );
 
-  const ALL_LINKS  = [VMESS_LINK, VLESS_LINK, TROJAN_LINK].join('\n');
-  const SUB_BASE64 = Buffer.from(ALL_LINKS).toString('base64');
+  // Hysteria2（可选）
+  if (HY2_PORT && PUBLIC_IP) {
+    links.push(
+      `hysteria2://${UUID}@${PUBLIC_IP}:${HY2_PORT}` +
+      `?insecure=1#${encodeURIComponent(NAME + '-hy2')}`
+    );
+  }
+
+  // TUIC v5（可选）
+  if (TUIC_PORT && PUBLIC_IP) {
+    links.push(
+      `tuic://${UUID}:${UUID}@${PUBLIC_IP}:${TUIC_PORT}` +
+      `?congestion_control=bbr&alpn=h3&insecure=1` +
+      `#${encodeURIComponent(NAME + '-tuic')}`
+    );
+  }
+
+  // VLESS Reality（可选）
+  if (REALITY_PORT && PUBLIC_IP && global.REALITY_PUB_KEY) {
+    links.push(
+      `vless://${UUID}@${PUBLIC_IP}:${REALITY_PORT}` +
+      `?encryption=none&security=reality&sni=${REALITY_DOMAIN}` +
+      `&fp=chrome&pbk=${global.REALITY_PUB_KEY}&sid=${global.REALITY_SHORT_ID}` +
+      `&flow=xtls-rprx-vision&type=tcp` +
+      `#${encodeURIComponent(NAME + '-reality')}`
+    );
+  }
+
+  // Shadowsocks 2022（可选）
+  if (SS_PORT && PUBLIC_IP) {
+    const ssUserInfo = Buffer.from(`2022-blake3-aes-128-gcm:${SS_PASS}`).toString('base64');
+    links.push(
+      `ss://${ssUserInfo}@${PUBLIC_IP}:${SS_PORT}` +
+      `#${encodeURIComponent(NAME + '-ss')}`
+    );
+  }
+
+  const SUB_BASE64 = Buffer.from(links.join('\n')).toString('base64');
   global.SUB_CONTENT = SUB_BASE64;
 
   const SUB_FILE = `${process.cwd()}/sub.txt`;
@@ -360,6 +609,17 @@ async function main() {
   console.log('============================================');
   console.log(`订阅地址: https://${HOST}${SUB_PATH}`);
   console.log(`节点文件: ${SUB_FILE}`);
+
+  // 输出已启用协议汇总
+  console.log('============== 已启用协议 ==============');
+  console.log(`✓ VMess  + WS + Argo TLS`);
+  console.log(`✓ VLESS  + WS + Argo TLS`);
+  console.log(`✓ Trojan + WS + Argo TLS`);
+  if (HY2_PORT)     console.log(`✓ Hysteria2     端口 ${HY2_PORT}`);
+  if (TUIC_PORT)    console.log(`✓ TUIC v5       端口 ${TUIC_PORT}`);
+  if (REALITY_PORT) console.log(`✓ VLESS Reality 端口 ${REALITY_PORT}  PubKey: ${global.REALITY_PUB_KEY || '生成中'}`);
+  if (SS_PORT)      console.log(`✓ Shadowsocks   端口 ${SS_PORT}  密码: ${SS_PASS}`);
+  console.log('========================================');
 }
 
 main().catch(err => {
