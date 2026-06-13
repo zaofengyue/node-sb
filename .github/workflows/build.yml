@@ -1,9 +1,8 @@
-name: Build & Release
+name: Build and Push
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'index.js'
       - 'package.json'
@@ -12,32 +11,23 @@ on:
       - '.github/workflows/build.yml'
   workflow_dispatch:
 
-permissions:
-  contents: write
-  packages: write
-
 jobs:
-  release:
-    name: Build & Publish
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Generate version tag
-        id: version
-        run: |
-          TAG="v$(date +'%Y%m%d%H%M%S')"
-          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}"     >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install javascript-obfuscator
+      - name: Install obfuscator
         run: npm install -g javascript-obfuscator
 
       - name: Obfuscate index.js
@@ -54,68 +44,42 @@ jobs:
             --string-array-shuffle true \
             --split-strings true \
             --split-strings-chunk-length 10 \
-            --transform-object-keys true
-          mv index.obf.js dist-index.js
+            --transform-object-keys true \
+            --dead-code-injection false
 
-      - name: Package release zip
+      - name: Package release files
         run: |
-          mkdir -p release-pkg
-          cp dist-index.js  release-pkg/index.js
-          cp package.json   release-pkg/package.json
-          cp index.html     release-pkg/index.html
-          cd release-pkg
-          zip -q ../node-sb-${{ steps.version.outputs.version }}.zip ./*
+          mkdir -p release
+          cp index.obf.js release/index.js
+          cp package.json release/package.json
+          cp index.html   release/index.html
+          cd release && zip -r ../node-sb.zip .
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
-          body: |
-            ## node-sb ${{ steps.version.outputs.tag }}
-
-            ### 安装方式
-
-            **一键脚本（推荐）**
-            ```bash
-            bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
-            ```
-
-            **指定环境变量**
-            ```bash
-            UUID=your-uuid ARGO_DOMAIN=your.domain ARGO_AUTH="your-token" bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)
-            ```
-
-            **Docker**
-            ```bash
-            docker run -d --restart=always \
-              -e UUID=your-uuid \
-              -e ARGO_DOMAIN=your-domain \
-              -e ARGO_AUTH=your-token \
-              -p 3000:3000 \
-              ghcr.io/zaofengyue/node-sb:latest
-            ```
-          files: node-sb-${{ steps.version.outputs.version }}.zip
-          make_latest: true
-          overwrite: true
-
-      - name: Log in to GHCR
+      - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Docker image
+      - name: Build and Push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/zaofengyue/node-sb:latest
-            ghcr.io/zaofengyue/node-sb:${{ steps.version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ghcr.io/${{ github.repository_owner }}/node-sb:latest
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Release
+          files: node-sb.zip
+          make_latest: true
+          body: |
+            ## node-sb
+            下载 `node-sb.zip` 解压后上传到平台即可使用。
+            包含文件：
+            - `index.js`（已混淆）
+            - `package.json`
+            - `index.html`（伪装页，可自行替换）
