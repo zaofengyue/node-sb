@@ -317,19 +317,33 @@ async function main() {
     }
   ];
 
-  // 端口冲突检测：同传输类型不能共用同一端口
-  // UDP 组：Hysteria2 和 TUIC 均为 UDP，端口相同则冲突
-  // TCP 组：Reality 和 Shadowsocks 均为 TCP，端口相同则冲突
-  // 跨类型（UDP vs TCP）端口相同完全没问题，可以共用
-  const hy2Active     = !!(HY2_PORT  && !(TUIC_PORT    && TUIC_PORT    === HY2_PORT));
-  const tuicActive    = !!(TUIC_PORT  && !(HY2_PORT     && HY2_PORT     === TUIC_PORT));
-  const realityActive = !!(REALITY_PORT && !(SS_PORT    && SS_PORT      === REALITY_PORT));
-  const ssActive      = !!(SS_PORT    && !(REALITY_PORT && REALITY_PORT === SS_PORT));
+  // ── 端口唯一性检测 ────────────────────────
+  // sing-box 中任意两个 inbound 不能绑定同一端口号，无论协议或传输类型
+  // 优先级：HY2 > TUIC > Reality > SS
+  const usedPorts = new Set();
+  function portOk(port) {
+    if (!port) return false;
+    if (usedPorts.has(port)) return false;
+    usedPorts.add(port);
+    return true;
+  }
 
-  if (HY2_PORT && TUIC_PORT && HY2_PORT === TUIC_PORT)
-    console.warn(`警告: HY2_PORT 与 TUIC_PORT 相同 (${HY2_PORT})，均为 UDP 会冲突，TUIC 已跳过`);
-  if (REALITY_PORT && SS_PORT && REALITY_PORT === SS_PORT)
-    console.warn(`警告: REALITY_PORT 与 SS_PORT 相同 (${REALITY_PORT})，均为 TCP 会冲突，Shadowsocks 已跳过`);
+  const hy2Active     = portOk(HY2_PORT);
+  const tuicActive    = portOk(TUIC_PORT);
+  const realityActive = portOk(REALITY_PORT);
+  const ssActive      = portOk(SS_PORT);
+
+  if (HY2_PORT     && !hy2Active)     console.warn(`警告: HY2_PORT(${HY2_PORT}) 端口冲突，Hysteria2 已跳过`);
+  if (TUIC_PORT    && !tuicActive)    console.warn(`警告: TUIC_PORT(${TUIC_PORT}) 端口冲突，TUIC 已跳过`);
+  if (REALITY_PORT && !realityActive) console.warn(`警告: REALITY_PORT(${REALITY_PORT}) 端口冲突，Reality 已跳过`);
+  if (SS_PORT      && !ssActive)      console.warn(`警告: SS_PORT(${SS_PORT}) 端口冲突，Shadowsocks 已跳过`);
+
+  // ── 先下载/找到 sing-box，Reality 密钥生成依赖它 ──
+  let sbBin = '';
+  for (const p of ['sing-box', '/usr/local/bin/sing-box', '/usr/bin/sing-box']) {
+    try { execSync(`which ${p} 2>/dev/null || test -x ${p}`); sbBin = p; break; } catch {}
+  }
+  if (!sbBin) sbBin = await downloadSingBox();
 
   // 自签证书（Hysteria2 / TUIC 需要）
   let certPath = '', keyPath = '';
@@ -342,7 +356,7 @@ async function main() {
 
   // Hysteria2（可选，UDP）
   if (hy2Active) {
-    console.log(`启用 Hysteria2，端口 ${HY2_PORT} (UDP)`);
+    console.log(`启用 Hysteria2，端口 ${HY2_PORT}`);
     inbounds.push({
       type: 'hysteria2',
       tag: 'hy2-in',
@@ -357,9 +371,9 @@ async function main() {
     });
   }
 
-  // TUIC v5（可选，UDP，可与 Hysteria2 端口号不同时共存）
+  // TUIC v5（可选，UDP）
   if (tuicActive) {
-    console.log(`启用 TUIC v5，端口 ${TUIC_PORT} (UDP)`);
+    console.log(`启用 TUIC v5，端口 ${TUIC_PORT}`);
     inbounds.push({
       type: 'tuic',
       tag: 'tuic-in',
@@ -375,39 +389,54 @@ async function main() {
     });
   }
 
-  // VLESS Reality（可选，TCP，可与 Hysteria2/TUIC 共用端口号）
+  // VLESS Reality（可选，TCP）
   if (realityActive) {
     console.log(`启用 VLESS Reality，端口 ${REALITY_PORT}`);
-    // 生成 Reality 密钥对
-    let realityPrivKey = '', realityPubKey = '', realityShortId = '';
-    try {
-      const keyOut = execSync(`${SB_BIN_PATH || 'sing-box'} generate reality-keypair`, { encoding: 'utf8' });
-      const privMatch = keyOut.match(/PrivateKey:\s*(\S+)/);
-      const pubMatch  = keyOut.match(/PublicKey:\s*(\S+)/);
-      if (privMatch) realityPrivKey = privMatch[1];
-      if (pubMatch)  realityPubKey  = pubMatch[1];
-    } catch {
-      realityPrivKey = crypto.randomBytes(32).toString('base64url');
-      realityPubKey  = '';
-    }
-    realityShortId = crypto.randomBytes(4).toString('hex');
 
-    // 持久化 Reality 密钥（重启后 pubkey 不变，客户端无需重新配置）
+    // Reality 密钥：优先读持久化文件，文件不存在才用 sing-box 生成
     const realityKeyFile = `${HOME}/reality-keys.json`;
+    let realityPrivKey = '', realityPubKey = '', realityShortId = '';
+
     if (fs.existsSync(realityKeyFile)) {
+      // Bug fix：校验文件完整性，损坏则删除重新生成
       try {
         const saved = JSON.parse(fs.readFileSync(realityKeyFile, 'utf8'));
-        realityPrivKey = saved.privKey || realityPrivKey;
-        realityPubKey  = saved.pubKey  || realityPubKey;
-        realityShortId = saved.shortId || realityShortId;
-      } catch {}
-    } else {
+        if (saved.privKey && saved.pubKey && saved.shortId) {
+          realityPrivKey = saved.privKey;
+          realityPubKey  = saved.pubKey;
+          realityShortId = saved.shortId;
+        } else {
+          throw new Error('incomplete');
+        }
+      } catch {
+        console.warn('reality-keys.json 损坏，重新生成...');
+        fs.unlinkSync(realityKeyFile);
+      }
+    }
+
+    if (!realityPrivKey) {
+      try {
+        const keyOut = execSync(`"${sbBin}" generate reality-keypair`, { encoding: 'utf8' });
+        const privMatch = keyOut.match(/PrivateKey:\s*(\S+)/);
+        const pubMatch  = keyOut.match(/PublicKey:\s*(\S+)/);
+        if (privMatch && pubMatch) {
+          realityPrivKey = privMatch[1];
+          realityPubKey  = pubMatch[1];
+        }
+      } catch {
+        realityPrivKey = crypto.randomBytes(32).toString('base64url');
+        realityPubKey  = crypto.randomBytes(32).toString('base64url');
+      }
+      realityShortId = crypto.randomBytes(4).toString('hex');
       fs.writeFileSync(realityKeyFile, JSON.stringify({
         privKey: realityPrivKey,
         pubKey:  realityPubKey,
         shortId: realityShortId
       }));
     }
+
+    global.REALITY_PUB_KEY  = realityPubKey;
+    global.REALITY_SHORT_ID = realityShortId;
 
     inbounds.push({
       type: 'vless',
@@ -426,15 +455,11 @@ async function main() {
         }
       }
     });
-
-    // 暴露 pubkey 供订阅生成
-    global.REALITY_PUB_KEY  = realityPubKey;
-    global.REALITY_SHORT_ID = realityShortId;
   }
 
-  // Shadowsocks 2022（可选，TCP，可与 Hysteria2/TUIC 共用端口号）
+  // Shadowsocks 2022（可选，TCP）
   if (ssActive) {
-    console.log(`启用 Shadowsocks 2022，端口 ${SS_PORT} (TCP)`);
+    console.log(`启用 Shadowsocks 2022，端口 ${SS_PORT}`);
     inbounds.push({
       type: 'shadowsocks',
       tag: 'ss-in',
@@ -452,41 +477,6 @@ async function main() {
   };
 
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-
-  // ── 启动 sing-box ──────────────────────────
-  let sbBin = '';
-  for (const p of ['sing-box', '/usr/local/bin/sing-box', '/usr/bin/sing-box']) {
-    try { execSync(`which ${p} 2>/dev/null || test -x ${p}`); sbBin = p; break; } catch {}
-  }
-  if (!sbBin) sbBin = await downloadSingBox();
-
-  // Reality 密钥生成依赖 sing-box 二进制，确保路径正确
-  if (REALITY_PORT && !global.REALITY_PUB_KEY) {
-    try {
-      const keyOut = execSync(`"${sbBin}" generate reality-keypair`, { encoding: 'utf8' });
-      const privMatch = keyOut.match(/PrivateKey:\s*(\S+)/);
-      const pubMatch  = keyOut.match(/PublicKey:\s*(\S+)/);
-      const realityKeyFile = `${HOME}/reality-keys.json`;
-      if (privMatch && pubMatch && !fs.existsSync(realityKeyFile)) {
-        const realityShortId = crypto.randomBytes(4).toString('hex');
-        fs.writeFileSync(realityKeyFile, JSON.stringify({
-          privKey: privMatch[1],
-          pubKey:  pubMatch[1],
-          shortId: realityShortId
-        }));
-        // 重写配置里的 reality inbound
-        const saved = JSON.parse(fs.readFileSync(realityKeyFile, 'utf8'));
-        const rIdx  = config.inbounds.findIndex(i => i.tag === 'reality-in');
-        if (rIdx >= 0) {
-          config.inbounds[rIdx].tls.reality.private_key  = saved.privKey;
-          config.inbounds[rIdx].tls.reality.short_id     = [saved.shortId];
-          global.REALITY_PUB_KEY  = saved.pubKey;
-          global.REALITY_SHORT_ID = saved.shortId;
-          fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-        }
-      }
-    } catch {}
-  }
 
   const sbEnv = { ...process.env };
   delete sbEnv.PORT;
