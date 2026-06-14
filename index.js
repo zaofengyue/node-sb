@@ -1,3 +1,18 @@
+// ========== 错误日志（启动失败时写入 /home/container/error.log）==========
+process.on('uncaughtException', (err) => {
+  const fs = require('fs');
+  const msg = `[${new Date().toISOString()}] uncaughtException: ${err.stack || err}\n`;
+  try { fs.appendFileSync('/home/container/error.log', msg); } catch {}
+  console.error(msg);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  const fs = require('fs');
+  const msg = `[${new Date().toISOString()}] unhandledRejection: ${reason?.stack || reason}\n`;
+  try { fs.appendFileSync('/home/container/error.log', msg); } catch {}
+  console.error(msg);
+  process.exit(1);
+});
 // ========== 预留配置，留空则自动识别 ==========
 const PRESET_UUID           = '';
 const PRESET_PORT           = '';
@@ -6,7 +21,7 @@ const PRESET_NAME           = '';
 const PRESET_SUB            = '';
 const PRESET_ARGO_DOMAIN    = '';
 const PRESET_ARGO_AUTH      = '';
-// ── 填 true 禁用 Argo 隧道──
+// ── 填 true 禁用 Argo 隧道（省去 cloudflared 进程，节省 10-25 MB 内存）──
 const PRESET_DISABLE_ARGO   = '';
 // ── 可选协议，填写端口则启动对应协议，留空不启动 ──
 const PRESET_HY2_PORT       = '';
