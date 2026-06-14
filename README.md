@@ -114,7 +114,7 @@ cd node-sb && node index.js
 | `HY2_PORT` | Hysteria2 | 设置端口启用，需开放 UDP |
 | `TUIC_PORT` | TUIC v5 | 设置端口启用，需开放 UDP |
 | `REALITY_PORT` | VLESS Reality | 设置端口启用，需开放 TCP |
-| `REALITY_DOMAIN` | VLESS Reality 伪装域名 | 默认 `addons.mozilla.org` |
+| `REALITY_DOMAIN` | VLESS Reality 伪装域名 | 默认 `www.iij.ad.jp` |
 | `SS_PORT` | Shadowsocks 2022 | 设置端口启用，需开放 TCP |
 
 > Hysteria2 / TUIC 使用自签证书，客户端需开启跳过证书验证。
