@@ -6,7 +6,7 @@ const PRESET_NAME           = '';
 const PRESET_SUB            = '';
 const PRESET_ARGO_DOMAIN    = '';
 const PRESET_ARGO_AUTH      = '';
-// ── 填 true 禁用 Argo 隧道（省去 cloudflared 进程，节省 10-25 MB 内存）──
+// ── 填 true 禁用 Argo 隧道──
 const PRESET_DISABLE_ARGO   = '';
 // ── 可选协议，填写端口则启动对应协议，留空不启动 ──
 const PRESET_HY2_PORT       = '';
