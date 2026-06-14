@@ -6,6 +6,8 @@ const PRESET_NAME           = '';
 const PRESET_SUB            = '';
 const PRESET_ARGO_DOMAIN    = '';
 const PRESET_ARGO_AUTH      = '';
+// ── 填 true 禁用 Argo 隧道（省去 cloudflared 进程，节省 10-25 MB 内存）──
+const PRESET_DISABLE_ARGO   = '';
 // ── 可选协议，填写端口则启动对应协议，留空不启动 ──
 const PRESET_HY2_PORT       = '';
 const PRESET_TUIC_PORT      = '';
@@ -246,14 +248,27 @@ async function getPublicIP() {
 
 async function main() {
   // UUID
+  // 优先级：代码预设 > 环境变量 > 持久化文件 > 随机生成
+  // PRESET_UUID 或环境变量有值时直接使用，完全跳过文件读写，
+  // 避免在无写权限的容器里因创建 uuid.txt 失败而报错
   let UUID = PRESET_UUID || process.env.UUID || '';
-  if (UUID) {
-    fs.writeFileSync(UUID_FILE, UUID);
-  } else if (fs.existsSync(UUID_FILE)) {
-    UUID = fs.readFileSync(UUID_FILE, 'utf8').trim();
-  } else {
-    UUID = crypto.randomUUID();
-    fs.writeFileSync(UUID_FILE, UUID);
+  if (!UUID) {
+    if (fs.existsSync(UUID_FILE)) {
+      try {
+        UUID = fs.readFileSync(UUID_FILE, 'utf8').trim();
+      } catch (e) {
+        console.warn(`读取 uuid.txt 失败: ${e.message}，将随机生成 UUID`);
+      }
+    }
+    if (!UUID) {
+      UUID = crypto.randomUUID();
+      try {
+        fs.writeFileSync(UUID_FILE, UUID);
+      } catch (e) {
+        console.warn(`uuid.txt 写入失败: ${e.message}，本次使用随机 UUID: ${UUID}`);
+        console.warn('建议在代码顶部 PRESET_UUID 填入此 UUID 避免重启后变化');
+      }
+    }
   }
 
   const TROJAN_PASS = UUID;
@@ -269,8 +284,9 @@ async function main() {
   const SUB_RAW  = PRESET_SUB || process.env.SUB || 'sub';
   const SUB_PATH = '/' + SUB_RAW.replace(/^\//, '');
 
-  const ARGO_DOMAIN = PRESET_ARGO_DOMAIN || process.env.ARGO_DOMAIN || '';
-  const ARGO_AUTH   = PRESET_ARGO_AUTH   || process.env.ARGO_AUTH   || '';
+  const ARGO_DOMAIN    = PRESET_ARGO_DOMAIN  || process.env.ARGO_DOMAIN    || '';
+  const ARGO_AUTH      = PRESET_ARGO_AUTH    || process.env.ARGO_AUTH      || '';
+  const DISABLE_ARGO   = PRESET_DISABLE_ARGO === 'true' || process.env.DISABLE_ARGO === 'true';
 
   const ARGO_PORT = (ARGO_DOMAIN && ARGO_AUTH)
     ? parseInt(PRESET_ARGO_PORT || process.env.ARGO_PORT || '8001')
@@ -312,33 +328,37 @@ async function main() {
     : '';
 
   // ── sing-box 配置 ──────────────────────────
-  const inbounds = [
-    // Argo 三协议，固定内部端口
-    {
-      type: 'vmess',
-      tag: 'vmess-in',
-      listen: '127.0.0.1',
-      listen_port: V_VMESS_PORT,
-      users: [{ uuid: UUID, alterId: 0 }],
-      transport: { type: 'ws', path: WS_PATH_VMESS }
-    },
-    {
-      type: 'vless',
-      tag: 'vless-in',
-      listen: '127.0.0.1',
-      listen_port: V_VLESS_PORT,
-      users: [{ uuid: UUID, flow: '' }],
-      transport: { type: 'ws', path: WS_PATH_VLESS }
-    },
-    {
-      type: 'trojan',
-      tag: 'trojan-in',
-      listen: '127.0.0.1',
-      listen_port: V_TROJAN_PORT,
-      users: [{ password: TROJAN_PASS }],
-      transport: { type: 'ws', path: WS_PATH_TROJAN }
-    }
-  ];
+  const inbounds = [];
+
+  // Argo 三协议（禁用 Argo 时跳过，省去内部监听端口）
+  if (!DISABLE_ARGO) {
+    inbounds.push(
+      {
+        type: 'vmess',
+        tag: 'vmess-in',
+        listen: '127.0.0.1',
+        listen_port: V_VMESS_PORT,
+        users: [{ uuid: UUID, alterId: 0 }],
+        transport: { type: 'ws', path: WS_PATH_VMESS }
+      },
+      {
+        type: 'vless',
+        tag: 'vless-in',
+        listen: '127.0.0.1',
+        listen_port: V_VLESS_PORT,
+        users: [{ uuid: UUID, flow: '' }],
+        transport: { type: 'ws', path: WS_PATH_VLESS }
+      },
+      {
+        type: 'trojan',
+        tag: 'trojan-in',
+        listen: '127.0.0.1',
+        listen_port: V_TROJAN_PORT,
+        users: [{ password: TROJAN_PASS }],
+        transport: { type: 'ws', path: WS_PATH_TROJAN }
+      }
+    );
+  }
 
   // ── 先下载/找到 sing-box，Reality 密钥生成依赖它 ──
   // 优先使用绝对路径，避免 spawn 在 PATH 中找不到命令（ENOENT）
@@ -395,6 +415,7 @@ async function main() {
       tag: 'hy2-in',
       listen: '::',
       listen_port: parseInt(HY2_PORT),
+      network: 'udp',
       users: [{ password: UUID }],
       masquerade: 'https://bing.com',
       tls: {
@@ -414,6 +435,7 @@ async function main() {
       tag: 'tuic-in',
       listen: '::',
       listen_port: parseInt(TUIC_PORT),
+      network: 'udp',
       users: [{ uuid: UUID }],
       congestion_control: 'bbr',
       tls: {
@@ -550,36 +572,38 @@ async function main() {
   await new Promise(r => setTimeout(r, 1500));
 
   // ── Node.js WS 反向代理（Argo 三协议路径分发）──
-  const argoServer = http.createServer((req, res) => {
-    res.writeHead(400);
-    res.end('Bad Request');
-  });
-
-  argoServer.on('upgrade', (req, socket, head) => {
-    const path = req.url.split('?')[0];
-    let targetPort;
-    if (path === WS_PATH_VMESS)       targetPort = V_VMESS_PORT;
-    else if (path === WS_PATH_VLESS)  targetPort = V_VLESS_PORT;
-    else if (path === WS_PATH_TROJAN) targetPort = V_TROJAN_PORT;
-    else { socket.destroy(); return; }
-
-    const proxy = net.connect(targetPort, '127.0.0.1', () => {
-      proxy.write(
-        `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
-        Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n') +
-        '\r\n\r\n'
-      );
-      proxy.write(head);
-      socket.pipe(proxy);
-      proxy.pipe(socket);
+  if (!DISABLE_ARGO) {
+    const argoServer = http.createServer((req, res) => {
+      res.writeHead(400);
+      res.end('Bad Request');
     });
-    proxy.on('error', () => socket.destroy());
-    socket.on('error', () => proxy.destroy());
-  });
 
-  argoServer.listen(ARGO_PORT, '127.0.0.1', () => {
-    console.log(`Argo 转发服务启动，端口 ${ARGO_PORT}`);
-  });
+    argoServer.on('upgrade', (req, socket, head) => {
+      const path = req.url.split('?')[0];
+      let targetPort;
+      if (path === WS_PATH_VMESS)       targetPort = V_VMESS_PORT;
+      else if (path === WS_PATH_VLESS)  targetPort = V_VLESS_PORT;
+      else if (path === WS_PATH_TROJAN) targetPort = V_TROJAN_PORT;
+      else { socket.destroy(); return; }
+
+      const proxy = net.connect(targetPort, '127.0.0.1', () => {
+        proxy.write(
+          `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
+          Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n') +
+          '\r\n\r\n'
+        );
+        proxy.write(head);
+        socket.pipe(proxy);
+        proxy.pipe(socket);
+      });
+      proxy.on('error', () => socket.destroy());
+      socket.on('error', () => proxy.destroy());
+    });
+
+    argoServer.listen(ARGO_PORT, '127.0.0.1', () => {
+      console.log(`Argo 转发服务启动，端口 ${ARGO_PORT}`);
+    });
+  }
 
   // ── HTTP 服务（伪装页 + 订阅）──────────────
   const INDEX_HTML = fs.existsSync('./index.html')
@@ -602,33 +626,40 @@ async function main() {
     console.log(`HTTP 服务启动，端口 ${INBOUND_PORT}`);
   });
 
-  // ── 启动 cloudflared ───────────────────────
-  const cfBin    = await downloadCloudflared();
-  const argoHost = await startArgoTunnel(cfBin, ARGO_PORT, ARGO_DOMAIN, ARGO_AUTH);
-  const HOST     = argoHost || 'your-domain.com';
+  // ── 启动 cloudflared（禁用 Argo 时跳过，省去整个 cloudflared 进程）──
+  let HOST = 'your-domain.com';
+  if (!DISABLE_ARGO) {
+    const cfBin    = await downloadCloudflared();
+    const argoHost = await startArgoTunnel(cfBin, ARGO_PORT, ARGO_DOMAIN, ARGO_AUTH);
+    HOST = argoHost || 'your-domain.com';
+  } else {
+    console.log('Argo 隧道已禁用，跳过 cloudflared');
+  }
 
   // ── 生成订阅链接 ───────────────────────────
   const links = [];
 
-  // Argo 三协议
-  const VMESS_OBJ = {
-    v: '2', ps: NAME, add: CF_PREFER_HOST, port: '443',
-    id: UUID, aid: '0', scy: 'auto', net: 'ws', type: 'none',
-    host: HOST, path: WS_PATH_VMESS, tls: 'tls', sni: HOST
-  };
-  links.push('vmess://' + Buffer.from(JSON.stringify(VMESS_OBJ)).toString('base64'));
+  // Argo 三协议（禁用时不生成对应订阅链接）
+  if (!DISABLE_ARGO) {
+    const VMESS_OBJ = {
+      v: '2', ps: NAME, add: CF_PREFER_HOST, port: '443',
+      id: UUID, aid: '0', scy: 'auto', net: 'ws', type: 'none',
+      host: HOST, path: WS_PATH_VMESS, tls: 'tls', sni: HOST
+    };
+    links.push('vmess://' + Buffer.from(JSON.stringify(VMESS_OBJ)).toString('base64'));
 
-  links.push(
-    `vless://${UUID}@${CF_PREFER_HOST}:443` +
-    `?encryption=none&security=tls&sni=${HOST}&type=ws&host=${HOST}` +
-    `&path=${encodeURIComponent(WS_PATH_VLESS)}#${encodeURIComponent(NAME)}`
-  );
+    links.push(
+      `vless://${UUID}@${CF_PREFER_HOST}:443` +
+      `?encryption=none&security=tls&sni=${HOST}&type=ws&host=${HOST}` +
+      `&path=${encodeURIComponent(WS_PATH_VLESS)}#${encodeURIComponent(NAME)}`
+    );
 
-  links.push(
-    `trojan://${TROJAN_PASS}@${CF_PREFER_HOST}:443` +
-    `?security=tls&sni=${HOST}&type=ws&host=${HOST}` +
-    `&path=${encodeURIComponent(WS_PATH_TROJAN)}#${encodeURIComponent(NAME)}`
-  );
+    links.push(
+      `trojan://${TROJAN_PASS}@${CF_PREFER_HOST}:443` +
+      `?security=tls&sni=${HOST}&type=ws&host=${HOST}` +
+      `&path=${encodeURIComponent(WS_PATH_TROJAN)}#${encodeURIComponent(NAME)}`
+    );
+  }
 
   // Hysteria2（可选，UDP）
   if (hy2Active && PUBLIC_IP) {
@@ -683,13 +714,16 @@ async function main() {
 
   // 输出已启用协议汇总
   console.log('============== 已启用协议 ==============');
-  console.log(`✓ VMess  + WS + Argo TLS`);
-  console.log(`✓ VLESS  + WS + Argo TLS`);
-  console.log(`✓ Trojan + WS + Argo TLS`);
+  if (!DISABLE_ARGO) {
+    console.log(`✓ VMess  + WS + Argo TLS`);
+    console.log(`✓ VLESS  + WS + Argo TLS`);
+    console.log(`✓ Trojan + WS + Argo TLS`);
+  }
   if (hy2Active)     console.log(`✓ Hysteria2     端口 ${HY2_PORT} (UDP)`);
   if (tuicActive)    console.log(`✓ TUIC v5       端口 ${TUIC_PORT} (UDP)`);
   if (realityActive) console.log(`✓ VLESS Reality 端口 ${REALITY_PORT}  PubKey: ${global.REALITY_PUB_KEY || '生成中'}`);
   if (ssActive)      console.log(`✓ Shadowsocks   端口 ${SS_PORT} (TCP)  密码: ${SS_PASS}`);
+  if (DISABLE_ARGO)  console.log(`✗ Argo 隧道已禁用`);
   console.log('========================================');
 }
 
