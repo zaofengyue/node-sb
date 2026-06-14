@@ -74,11 +74,11 @@ function download(url, dest) {
   throw new Error(`下载失败: ${url}`);
 }
 
-// SS2022 密码：需要 base64(32字节)，从 UUID 派生
+// SS2022 密码：2022-blake3-aes-128-gcm 需要 16 字节 key，base64 后 24 字符
+// 取 UUID 去横线后前 32 个十六进制字符（即 16 字节）做 base64
 function deriveSSPassword(uuid) {
-  const hex = uuid.replace(/-/g, '');
-  const buf = Buffer.from(hex.padEnd(64, '0').slice(0, 64), 'hex');
-  return buf.toString('base64');
+  const hex = uuid.replace(/-/g, '').slice(0, 32);
+  return Buffer.from(hex, 'hex').toString('base64');
 }
 
 // 生成自签证书（Hysteria2 / TUIC 用）
@@ -87,6 +87,8 @@ function generateSelfSignedCert(dir) {
   const certPath = `${dir}/cert.pem`;
   if (fs.existsSync(keyPath) && fs.existsSync(certPath)) return { keyPath, certPath };
   fs.mkdirSync(dir, { recursive: true });
+
+  // 优先用 openssl 生成
   try {
     execSync(
       `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -days 3650 -nodes` +
@@ -94,11 +96,32 @@ function generateSelfSignedCert(dir) {
       ` -subj "/CN=bing.com/O=Microsoft/C=US"`,
       { stdio: 'pipe' }
     );
-  } catch {
-    // openssl 不可用时用 sing-box 自带证书占位，启动时会报警告但能运行
-    fs.writeFileSync(keyPath, '');
-    fs.writeFileSync(certPath, '');
-  }
+    return { keyPath, certPath };
+  } catch {}
+
+  // openssl 不可用时使用预置证书兜底
+  const PRESET_KEY = `-----BEGIN EC PARAMETERS-----
+BggqhkjOPQMBBw==
+-----END EC PARAMETERS-----
+-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIM4792SEtPqIt1ywqTd/0bYidBqpYV/++siNnfBYsdUYoAoGCCqGSM49
+AwEHoUQDQgAE1kHafPj07rJG+HboH2ekAI4r+e6TL38GWASANnngZreoQDF16ARa
+/TsyLyFoPkhLxSbehH/NBEjHtSZGaDhMqQ==
+-----END EC PRIVATE KEY-----`;
+
+  const PRESET_CERT = `-----BEGIN CERTIFICATE-----
+MIIBejCCASGgAwIBAgIUfWeQL3556PNJLp/veCFxGNj9crkwCgYIKoZIzj0EAwIw
+EzERMA8GA1UEAwwIYmluZy5jb20wHhcNMjUwOTE4MTgyMDIyWhcNMzUwOTE2MTgy
+MDIyWjATMREwDwYDVQQDDAhiaW5nLmNvbTBZMBMGByqGSM49AgEGCCqGSM49AwEH
+A0IABNZB2nz49O6yRvh26B9npACOK/nuky9/BlgEgDZ54Ga3qEAxdegEWv07Mi8h
+aD5IS8Um3oR/zQRIx7UmRmg4TKmjUzBRMB0GA1UdDgQWBBTV1cFID7UISE7PLTBR
+BfGbgkrMNzAfBgNVHSMEGDAWgBTV1cFID7UISE7PLTBRBfGbgkrMNzAPBgNVHRMB
+Af8EBTADAQH/MAoGCCqGSM49BAMCA0cAMEQCIAIDAJvg0vd/ytrQVvEcSm6XTlB+
+eQ6OFb9LbLYL9f+sAiAffoMbi4y/0YUSlTtz7as9S8/lciBF5VCUoVIKS+vX2g==
+-----END CERTIFICATE-----`;
+
+  fs.writeFileSync(keyPath, PRESET_KEY);
+  fs.writeFileSync(certPath, PRESET_CERT);
   return { keyPath, certPath };
 }
 
@@ -264,7 +287,7 @@ async function main() {
   const REALITY_PORT = REALITY_PORT_RAW ? parseInt(REALITY_PORT_RAW) : 0;
   const SS_PORT      = SS_PORT_RAW      ? parseInt(SS_PORT_RAW)      : 0;
 
-  const REALITY_DOMAIN = PRESET_REALITY_DOMAIN || process.env.REALITY_DOMAIN || 'addons.mozilla.org';
+  const REALITY_DOMAIN = PRESET_REALITY_DOMAIN || process.env.REALITY_DOMAIN || 'www.iij.ad.jp';
 
   // 节点名称
   const COUNTRY = await httpGet('https://ipinfo.io/country') ||
@@ -317,33 +340,43 @@ async function main() {
     }
   ];
 
-  // ── 端口唯一性检测 ────────────────────────
-  // sing-box 中任意两个 inbound 不能绑定同一端口号，无论协议或传输类型
-  // 优先级：HY2 > TUIC > Reality > SS
-  const usedPorts = new Set();
-  function portOk(port) {
-    if (!port) return false;
-    if (usedPorts.has(port)) return false;
-    usedPorts.add(port);
-    return true;
-  }
-
-  const hy2Active     = portOk(HY2_PORT);
-  const tuicActive    = portOk(TUIC_PORT);
-  const realityActive = portOk(REALITY_PORT);
-  const ssActive      = portOk(SS_PORT);
-
-  if (HY2_PORT     && !hy2Active)     console.warn(`警告: HY2_PORT(${HY2_PORT}) 端口冲突，Hysteria2 已跳过`);
-  if (TUIC_PORT    && !tuicActive)    console.warn(`警告: TUIC_PORT(${TUIC_PORT}) 端口冲突，TUIC 已跳过`);
-  if (REALITY_PORT && !realityActive) console.warn(`警告: REALITY_PORT(${REALITY_PORT}) 端口冲突，Reality 已跳过`);
-  if (SS_PORT      && !ssActive)      console.warn(`警告: SS_PORT(${SS_PORT}) 端口冲突，Shadowsocks 已跳过`);
-
   // ── 先下载/找到 sing-box，Reality 密钥生成依赖它 ──
+  // 优先使用绝对路径，避免 spawn 在 PATH 中找不到命令（ENOENT）
+  // 已下载到本地的优先级最高；其次找系统自带的绝对路径；找不到再下载
   let sbBin = '';
-  for (const p of ['sing-box', '/usr/local/bin/sing-box', '/usr/bin/sing-box']) {
-    try { execSync(`which ${p} 2>/dev/null || test -x ${p}`); sbBin = p; break; } catch {}
+  if (fs.existsSync(SB_BIN_PATH)) {
+    execSync(`chmod +x "${SB_BIN_PATH}"`);
+    sbBin = SB_BIN_PATH;
+  } else {
+    for (const p of ['/usr/local/bin/sing-box', '/usr/bin/sing-box']) {
+      if (fs.existsSync(p)) { sbBin = p; break; }
+    }
   }
   if (!sbBin) sbBin = await downloadSingBox();
+
+  // ── 端口唯一性检测 ──────────────────────────────────────────────────────
+  // 按「传输协议:端口」作为 key，允许同一端口号同时用于 TCP 和 UDP
+  // 例如 HY2(UDP):443 与 SS(TCP):443 可以共存，不会互相冲突
+  const usedPorts = new Set();
+  function portOk(p, proto) {
+    if (!p || isNaN(p)) return false;
+    const n = parseInt(p);
+    if (n < 1 || n > 65535) return false;
+    const key = `${proto}:${n}`;
+    if (usedPorts.has(key)) return false;
+    usedPorts.add(key);
+    return true;
+  }
+  // HY2 → UDP，TUIC → UDP，Reality → TCP，SS → TCP
+  const hy2Active     = portOk(HY2_PORT,     'udp');
+  const tuicActive    = portOk(TUIC_PORT,    'udp');
+  const realityActive = portOk(REALITY_PORT, 'tcp');
+  const ssActive      = portOk(SS_PORT,      'tcp');
+
+  if (HY2_PORT     && !hy2Active)     console.warn(`警告: HY2_PORT(${HY2_PORT}) 端口冲突或无效，Hysteria2 已跳过`);
+  if (TUIC_PORT    && !tuicActive)    console.warn(`警告: TUIC_PORT(${TUIC_PORT}) 端口冲突或无效，TUIC 已跳过`);
+  if (REALITY_PORT && !realityActive) console.warn(`警告: REALITY_PORT(${REALITY_PORT}) 端口冲突或无效，Reality 已跳过`);
+  if (SS_PORT      && !ssActive)      console.warn(`警告: SS_PORT(${SS_PORT}) 端口冲突或无效，Shadowsocks 已跳过`);
 
   // 自签证书（Hysteria2 / TUIC 需要）
   let certPath = '', keyPath = '';
@@ -361,10 +394,12 @@ async function main() {
       type: 'hysteria2',
       tag: 'hy2-in',
       listen: '::',
-      listen_port: HY2_PORT,
+      listen_port: parseInt(HY2_PORT),
       users: [{ password: UUID }],
+      masquerade: 'https://bing.com',
       tls: {
         enabled: true,
+        alpn: ['h3'],
         certificate_path: certPath,
         key_path: keyPath
       }
@@ -378,11 +413,12 @@ async function main() {
       type: 'tuic',
       tag: 'tuic-in',
       listen: '::',
-      listen_port: TUIC_PORT,
-      users: [{ uuid: UUID, password: UUID }],
+      listen_port: parseInt(TUIC_PORT),
+      users: [{ uuid: UUID }],
       congestion_control: 'bbr',
       tls: {
         enabled: true,
+        alpn: ['h3'],
         certificate_path: certPath,
         key_path: keyPath
       }
@@ -393,28 +429,30 @@ async function main() {
   if (realityActive) {
     console.log(`启用 VLESS Reality，端口 ${REALITY_PORT}`);
 
-    // Reality 密钥：优先读持久化文件，文件不存在才用 sing-box 生成
+    // ── 修复：Reality 密钥只持久化 privKey/pubKey，不再存 shortId ──
+    // short_id 统一使用空字符串，避免重启后不一致导致客户端握手失败
     const realityKeyFile = `${HOME}/reality-keys.json`;
-    let realityPrivKey = '', realityPubKey = '', realityShortId = '';
+    let realityPrivKey = '', realityPubKey = '';
 
     if (fs.existsSync(realityKeyFile)) {
-      // Bug fix：校验文件完整性，损坏则删除重新生成
       try {
         const saved = JSON.parse(fs.readFileSync(realityKeyFile, 'utf8'));
-        if (saved.privKey && saved.pubKey && saved.shortId) {
+        if (saved.privKey && saved.pubKey) {
           realityPrivKey = saved.privKey;
           realityPubKey  = saved.pubKey;
-          realityShortId = saved.shortId;
+          console.log('已从文件读取 Reality 密钥对');
         } else {
-          throw new Error('incomplete');
+          throw new Error('密钥文件字段不完整');
         }
-      } catch {
-        console.warn('reality-keys.json 损坏，重新生成...');
-        fs.unlinkSync(realityKeyFile);
+      } catch (e) {
+        console.warn(`reality-keys.json 读取失败（${e.message}），重新生成...`);
+        // 删除损坏文件，下面会重新生成
+        try { fs.unlinkSync(realityKeyFile); } catch {}
       }
     }
 
-    if (!realityPrivKey) {
+    // 文件不存在或读取失败时生成新密钥对
+    if (!realityPrivKey || !realityPubKey) {
       try {
         const keyOut = execSync(`"${sbBin}" generate reality-keypair`, { encoding: 'utf8' });
         const privMatch = keyOut.match(/PrivateKey:\s*(\S+)/);
@@ -422,27 +460,28 @@ async function main() {
         if (privMatch && pubMatch) {
           realityPrivKey = privMatch[1];
           realityPubKey  = pubMatch[1];
+          // ── 修复：只保存密钥对，不再保存 shortId ──
+          fs.writeFileSync(realityKeyFile, JSON.stringify({
+            privKey: realityPrivKey,
+            pubKey:  realityPubKey
+          }));
+          console.log('Reality 密钥对生成并保存成功');
+        } else {
+          throw new Error('密钥输出格式异常');
         }
-      } catch {
-        realityPrivKey = crypto.randomBytes(32).toString('base64url');
-        realityPubKey  = crypto.randomBytes(32).toString('base64url');
+      } catch (e) {
+        console.error('Reality 密钥生成失败:', e.message);
       }
-      realityShortId = crypto.randomBytes(4).toString('hex');
-      fs.writeFileSync(realityKeyFile, JSON.stringify({
-        privKey: realityPrivKey,
-        pubKey:  realityPubKey,
-        shortId: realityShortId
-      }));
     }
 
-    global.REALITY_PUB_KEY  = realityPubKey;
-    global.REALITY_SHORT_ID = realityShortId;
+    // 将 pubKey 挂到 global 供后续生成订阅链接使用
+    global.REALITY_PUB_KEY = realityPubKey;
 
     inbounds.push({
       type: 'vless',
       tag: 'reality-in',
       listen: '::',
-      listen_port: REALITY_PORT,
+      listen_port: parseInt(REALITY_PORT),
       users: [{ uuid: UUID, flow: 'xtls-rprx-vision' }],
       tls: {
         enabled: true,
@@ -451,20 +490,27 @@ async function main() {
           enabled: true,
           handshake: { server: REALITY_DOMAIN, server_port: 443 },
           private_key: realityPrivKey,
-          short_id: [realityShortId]
+          // ── 修复核心：固定使用空字符串，与客户端默认行为一致 ──
+          // 原来随机生成 8 位十六进制 shortId 并持久化，但持久化逻辑存在
+          // 缺陷：旧文件缺少 shortId 字段时会重新随机生成，导致每次重启
+          // 后服务端 short_id 变化，而客户端订阅链接未同步更新，握手失败。
+          short_id: ['']
         }
       }
     });
   }
 
   // Shadowsocks 2022（可选，TCP）
+  // 注意：2022-blake3-* 系列是纯 TCP 协议，必须显式指定 network: tcp
+  // 否则 sing-box 默认同时监听 TCP+UDP，当同端口已被 HY2/TUIC 占用 UDP 时会 bind 失败
   if (ssActive) {
     console.log(`启用 Shadowsocks 2022，端口 ${SS_PORT}`);
     inbounds.push({
       type: 'shadowsocks',
       tag: 'ss-in',
       listen: '::',
-      listen_port: SS_PORT,
+      listen_port: parseInt(SS_PORT),
+      network: 'tcp',
       method: '2022-blake3-aes-128-gcm',
       password: SS_PASS
     });
@@ -478,11 +524,30 @@ async function main() {
 
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 
+  // ── 启动 sing-box（后台解耦运行）──────────────────────────────────────
+  // 改用 detached + unref 后台运行，与 Node 进程完全解耦：
+  //   1. 容器重启时旧 sing-box 进程不会拖垮 Node 进程
+  //   2. 不再因 sing-box 退出而触发 process.exit，Node HTTP 服务保持在线
+  // 启动前先 pkill 清理上次残留进程，释放端口，避免 bind 失败
+  try {
+    execSync(`pkill -f "${SB_BIN_PATH}" 2>/dev/null || true`);
+    // 等待端口释放
+    await new Promise(r => setTimeout(r, 800));
+  } catch {}
+
   const sbEnv = { ...process.env };
   delete sbEnv.PORT;
 
-  const sb = spawn(sbBin, ['run', '-c', CONFIG_FILE], { stdio: 'inherit', env: sbEnv });
-  sb.on('exit', code => process.exit(code));
+  const sb = spawn(sbBin, ['run', '-c', CONFIG_FILE], {
+    stdio: 'ignore',
+    detached: true,
+    env: sbEnv
+  });
+  sb.unref();
+  console.log(`sing-box 已在后台启动，PID: ${sb.pid}`);
+
+  // 等待 sing-box 完成端口绑定再继续
+  await new Promise(r => setTimeout(r, 1500));
 
   // ── Node.js WS 反向代理（Argo 三协议路径分发）──
   const argoServer = http.createServer((req, res) => {
@@ -566,35 +631,37 @@ async function main() {
   );
 
   // Hysteria2（可选，UDP）
-  if (HY2_PORT && PUBLIC_IP) {
+  if (hy2Active && PUBLIC_IP) {
     links.push(
       `hysteria2://${UUID}@${PUBLIC_IP}:${HY2_PORT}` +
-      `?insecure=1#${encodeURIComponent(NAME)}`
+      `?sni=www.bing.com&insecure=1&alpn=h3&obfs=none` +
+      `#${encodeURIComponent(NAME)}`
     );
   }
 
-  // TUIC v5（可选，UDP，可与 Hysteria2 共用同一端口号）
-  if (TUIC_PORT && PUBLIC_IP) {
+  // TUIC v5（可选，UDP）
+  if (tuicActive && PUBLIC_IP) {
     links.push(
-      `tuic://${UUID}:${UUID}@${PUBLIC_IP}:${TUIC_PORT}` +
-      `?congestion_control=bbr&alpn=h3&insecure=1` +
+      `tuic://${UUID}:@${PUBLIC_IP}:${TUIC_PORT}` +
+      `?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1` +
       `#${encodeURIComponent(NAME)}`
     );
   }
 
   // VLESS Reality（可选，TCP）
-  if (REALITY_PORT && PUBLIC_IP && global.REALITY_PUB_KEY) {
+  // ── 修复：订阅链接不传 sid 参数（服务端 short_id 为空字符串，客户端默认匹配）──
+  if (realityActive && PUBLIC_IP && global.REALITY_PUB_KEY) {
     links.push(
       `vless://${UUID}@${PUBLIC_IP}:${REALITY_PORT}` +
-      `?encryption=none&security=reality&sni=${REALITY_DOMAIN}` +
-      `&fp=chrome&pbk=${global.REALITY_PUB_KEY}&sid=${global.REALITY_SHORT_ID}` +
-      `&flow=xtls-rprx-vision&type=tcp` +
+      `?encryption=none&flow=xtls-rprx-vision&security=reality` +
+      `&sni=${REALITY_DOMAIN}&fp=firefox&pbk=${global.REALITY_PUB_KEY}` +
+      `&type=tcp&headerType=none` +
       `#${encodeURIComponent(NAME)}`
     );
   }
 
-  // Shadowsocks 2022（可选，TCP，可与 Reality 共用同一端口号）
-  if (SS_PORT && PUBLIC_IP) {
+  // Shadowsocks 2022（可选，TCP）
+  if (ssActive && PUBLIC_IP) {
     const ssUserInfo = Buffer.from(`2022-blake3-aes-128-gcm:${SS_PASS}`).toString('base64');
     links.push(
       `ss://${ssUserInfo}@${PUBLIC_IP}:${SS_PORT}` +
@@ -621,7 +688,7 @@ async function main() {
   console.log(`✓ Trojan + WS + Argo TLS`);
   if (hy2Active)     console.log(`✓ Hysteria2     端口 ${HY2_PORT} (UDP)`);
   if (tuicActive)    console.log(`✓ TUIC v5       端口 ${TUIC_PORT} (UDP)`);
-  if (realityActive) console.log(`✓ VLESS Reality 端口 ${REALITY_PORT} (TCP)  PubKey: ${global.REALITY_PUB_KEY || '生成中'}`);
+  if (realityActive) console.log(`✓ VLESS Reality 端口 ${REALITY_PORT}  PubKey: ${global.REALITY_PUB_KEY || '生成中'}`);
   if (ssActive)      console.log(`✓ Shadowsocks   端口 ${SS_PORT} (TCP)  密码: ${SS_PASS}`);
   console.log('========================================');
 }
