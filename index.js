@@ -287,7 +287,7 @@ async function main() {
   const REALITY_PORT = REALITY_PORT_RAW ? parseInt(REALITY_PORT_RAW) : 0;
   const SS_PORT      = SS_PORT_RAW      ? parseInt(SS_PORT_RAW)      : 0;
 
-  const REALITY_DOMAIN = PRESET_REALITY_DOMAIN || process.env.REALITY_DOMAIN || 'www.iij.ad.jp';
+  const REALITY_DOMAIN = PRESET_REALITY_DOMAIN || process.env.REALITY_DOMAIN || 'addons.mozilla.org';
 
   // 节点名称
   const COUNTRY = await httpGet('https://ipinfo.io/country') ||
