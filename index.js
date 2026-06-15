@@ -6,6 +6,8 @@ const PRESET_NAME           = '';
 const PRESET_SUB            = '';
 const PRESET_ARGO_DOMAIN    = '';
 const PRESET_ARGO_AUTH      = '';
+// ── 填 'true' 禁用 Argo，留空则启用 ── 
+const PRESET_DISABLE_ARGO   = '';   
 // ── 可选协议，填写端口则启动对应协议，留空不启动 ──
 const PRESET_HY2_PORT       = '';
 const PRESET_TUIC_PORT      = '';
@@ -245,6 +247,9 @@ async function getPublicIP() {
 // ──────────────────────────────────────────────
 
 async function main() {
+  // ← 新增：读取 DISABLE_ARGO 开关，放在最前面
+  const DISABLE_ARGO = PRESET_DISABLE_ARGO === 'true' || process.env.DISABLE_ARGO === 'true';
+
   // UUID
   let UUID = PRESET_UUID || process.env.UUID || '';
   if (UUID) {
@@ -312,7 +317,8 @@ async function main() {
     : '';
 
   // ── sing-box 配置 ──────────────────────────
-  const inbounds = [
+  // ← 改动：DISABLE_ARGO 为 true 时不加入 Argo 三协议 inbound
+  const inbounds = DISABLE_ARGO ? [] : [
     // Argo 三协议，固定内部端口
     {
       type: 'vmess',
@@ -341,8 +347,6 @@ async function main() {
   ];
 
   // ── 先下载/找到 sing-box，Reality 密钥生成依赖它 ──
-  // 优先使用绝对路径，避免 spawn 在 PATH 中找不到命令（ENOENT）
-  // 已下载到本地的优先级最高；其次找系统自带的绝对路径；找不到再下载
   let sbBin = '';
   if (fs.existsSync(SB_BIN_PATH)) {
     execSync(`chmod +x "${SB_BIN_PATH}"`);
@@ -355,8 +359,6 @@ async function main() {
   if (!sbBin) sbBin = await downloadSingBox();
 
   // ── 端口唯一性检测 ──────────────────────────────────────────────────────
-  // 按「传输协议:端口」作为 key，允许同一端口号同时用于 TCP 和 UDP
-  // 例如 HY2(UDP):443 与 SS(TCP):443 可以共存，不会互相冲突
   const usedPorts = new Set();
   function portOk(p, proto) {
     if (!p || isNaN(p)) return false;
@@ -367,7 +369,6 @@ async function main() {
     usedPorts.add(key);
     return true;
   }
-  // HY2 → UDP，TUIC → UDP，Reality → TCP，SS → TCP
   const hy2Active     = portOk(HY2_PORT,     'udp');
   const tuicActive    = portOk(TUIC_PORT,    'udp');
   const realityActive = portOk(REALITY_PORT, 'tcp');
@@ -429,8 +430,6 @@ async function main() {
   if (realityActive) {
     console.log(`启用 VLESS Reality，端口 ${REALITY_PORT}`);
 
-    // ── 修复：Reality 密钥只持久化 privKey/pubKey，不再存 shortId ──
-    // short_id 统一使用空字符串，避免重启后不一致导致客户端握手失败
     const realityKeyFile = `${HOME}/reality-keys.json`;
     let realityPrivKey = '', realityPubKey = '';
 
@@ -446,12 +445,10 @@ async function main() {
         }
       } catch (e) {
         console.warn(`reality-keys.json 读取失败（${e.message}），重新生成...`);
-        // 删除损坏文件，下面会重新生成
         try { fs.unlinkSync(realityKeyFile); } catch {}
       }
     }
 
-    // 文件不存在或读取失败时生成新密钥对
     if (!realityPrivKey || !realityPubKey) {
       try {
         const keyOut = execSync(`"${sbBin}" generate reality-keypair`, { encoding: 'utf8' });
@@ -460,7 +457,6 @@ async function main() {
         if (privMatch && pubMatch) {
           realityPrivKey = privMatch[1];
           realityPubKey  = pubMatch[1];
-          // ── 修复：只保存密钥对，不再保存 shortId ──
           fs.writeFileSync(realityKeyFile, JSON.stringify({
             privKey: realityPrivKey,
             pubKey:  realityPubKey
@@ -474,7 +470,6 @@ async function main() {
       }
     }
 
-    // 将 pubKey 挂到 global 供后续生成订阅链接使用
     global.REALITY_PUB_KEY = realityPubKey;
 
     inbounds.push({
@@ -490,10 +485,6 @@ async function main() {
           enabled: true,
           handshake: { server: REALITY_DOMAIN, server_port: 443 },
           private_key: realityPrivKey,
-          // ── 修复核心：固定使用空字符串，与客户端默认行为一致 ──
-          // 原来随机生成 8 位十六进制 shortId 并持久化，但持久化逻辑存在
-          // 缺陷：旧文件缺少 shortId 字段时会重新随机生成，导致每次重启
-          // 后服务端 short_id 变化，而客户端订阅链接未同步更新，握手失败。
           short_id: ['']
         }
       }
@@ -501,8 +492,6 @@ async function main() {
   }
 
   // Shadowsocks 2022（可选，TCP）
-  // 注意：2022-blake3-* 系列是纯 TCP 协议，必须显式指定 network: tcp
-  // 否则 sing-box 默认同时监听 TCP+UDP，当同端口已被 HY2/TUIC 占用 UDP 时会 bind 失败
   if (ssActive) {
     console.log(`启用 Shadowsocks 2022，端口 ${SS_PORT}`);
     inbounds.push({
@@ -524,14 +513,8 @@ async function main() {
 
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 
-  // ── 启动 sing-box（后台解耦运行）──────────────────────────────────────
-  // 改用 detached + unref 后台运行，与 Node 进程完全解耦：
-  //   1. 容器重启时旧 sing-box 进程不会拖垮 Node 进程
-  //   2. 不再因 sing-box 退出而触发 process.exit，Node HTTP 服务保持在线
-  // 启动前先 pkill 清理上次残留进程，释放端口，避免 bind 失败
   try {
     execSync(`pkill -f "${SB_BIN_PATH}" 2>/dev/null || true`);
-    // 等待端口释放
     await new Promise(r => setTimeout(r, 800));
   } catch {}
 
@@ -546,40 +529,42 @@ async function main() {
   sb.unref();
   console.log(`sing-box 已在后台启动，PID: ${sb.pid}`);
 
-  // 等待 sing-box 完成端口绑定再继续
   await new Promise(r => setTimeout(r, 1500));
 
   // ── Node.js WS 反向代理（Argo 三协议路径分发）──
-  const argoServer = http.createServer((req, res) => {
-    res.writeHead(400);
-    res.end('Bad Request');
-  });
-
-  argoServer.on('upgrade', (req, socket, head) => {
-    const path = req.url.split('?')[0];
-    let targetPort;
-    if (path === WS_PATH_VMESS)       targetPort = V_VMESS_PORT;
-    else if (path === WS_PATH_VLESS)  targetPort = V_VLESS_PORT;
-    else if (path === WS_PATH_TROJAN) targetPort = V_TROJAN_PORT;
-    else { socket.destroy(); return; }
-
-    const proxy = net.connect(targetPort, '127.0.0.1', () => {
-      proxy.write(
-        `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
-        Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n') +
-        '\r\n\r\n'
-      );
-      proxy.write(head);
-      socket.pipe(proxy);
-      proxy.pipe(socket);
+  // ← 改动：DISABLE_ARGO 为 true 时跳过 argoServer 启动
+  if (!DISABLE_ARGO) {
+    const argoServer = http.createServer((req, res) => {
+      res.writeHead(400);
+      res.end('Bad Request');
     });
-    proxy.on('error', () => socket.destroy());
-    socket.on('error', () => proxy.destroy());
-  });
 
-  argoServer.listen(ARGO_PORT, '127.0.0.1', () => {
-    console.log(`Argo 转发服务启动，端口 ${ARGO_PORT}`);
-  });
+    argoServer.on('upgrade', (req, socket, head) => {
+      const path = req.url.split('?')[0];
+      let targetPort;
+      if (path === WS_PATH_VMESS)       targetPort = V_VMESS_PORT;
+      else if (path === WS_PATH_VLESS)  targetPort = V_VLESS_PORT;
+      else if (path === WS_PATH_TROJAN) targetPort = V_TROJAN_PORT;
+      else { socket.destroy(); return; }
+
+      const proxy = net.connect(targetPort, '127.0.0.1', () => {
+        proxy.write(
+          `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
+          Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n') +
+          '\r\n\r\n'
+        );
+        proxy.write(head);
+        socket.pipe(proxy);
+        proxy.pipe(socket);
+      });
+      proxy.on('error', () => socket.destroy());
+      socket.on('error', () => proxy.destroy());
+    });
+
+    argoServer.listen(ARGO_PORT, '127.0.0.1', () => {
+      console.log(`Argo 转发服务启动，端口 ${ARGO_PORT}`);
+    });
+  }
 
   // ── HTTP 服务（伪装页 + 订阅）──────────────
   const INDEX_HTML = fs.existsSync('./index.html')
@@ -603,32 +588,40 @@ async function main() {
   });
 
   // ── 启动 cloudflared ───────────────────────
-  const cfBin    = await downloadCloudflared();
-  const argoHost = await startArgoTunnel(cfBin, ARGO_PORT, ARGO_DOMAIN, ARGO_AUTH);
-  const HOST     = argoHost || 'your-domain.com';
+  // ← 改动：DISABLE_ARGO 为 true 时跳过 cloudflared，HOST 用占位符
+  let HOST = 'your-domain.com';
+  if (!DISABLE_ARGO) {
+    const cfBin    = await downloadCloudflared();
+    const argoHost = await startArgoTunnel(cfBin, ARGO_PORT, ARGO_DOMAIN, ARGO_AUTH);
+    HOST = argoHost || 'your-domain.com';
+  } else {
+    console.log('Argo 隧道已禁用，跳过 cloudflared');
+  }
 
   // ── 生成订阅链接 ───────────────────────────
   const links = [];
 
-  // Argo 三协议
-  const VMESS_OBJ = {
-    v: '2', ps: NAME, add: CF_PREFER_HOST, port: '443',
-    id: UUID, aid: '0', scy: 'auto', net: 'ws', type: 'none',
-    host: HOST, path: WS_PATH_VMESS, tls: 'tls', sni: HOST
-  };
-  links.push('vmess://' + Buffer.from(JSON.stringify(VMESS_OBJ)).toString('base64'));
+  // ← 改动：DISABLE_ARGO 为 true 时不生成 Argo 三协议订阅链接
+  if (!DISABLE_ARGO) {
+    const VMESS_OBJ = {
+      v: '2', ps: NAME, add: CF_PREFER_HOST, port: '443',
+      id: UUID, aid: '0', scy: 'auto', net: 'ws', type: 'none',
+      host: HOST, path: WS_PATH_VMESS, tls: 'tls', sni: HOST
+    };
+    links.push('vmess://' + Buffer.from(JSON.stringify(VMESS_OBJ)).toString('base64'));
 
-  links.push(
-    `vless://${UUID}@${CF_PREFER_HOST}:443` +
-    `?encryption=none&security=tls&sni=${HOST}&type=ws&host=${HOST}` +
-    `&path=${encodeURIComponent(WS_PATH_VLESS)}#${encodeURIComponent(NAME)}`
-  );
+    links.push(
+      `vless://${UUID}@${CF_PREFER_HOST}:443` +
+      `?encryption=none&security=tls&sni=${HOST}&type=ws&host=${HOST}` +
+      `&path=${encodeURIComponent(WS_PATH_VLESS)}#${encodeURIComponent(NAME)}`
+    );
 
-  links.push(
-    `trojan://${TROJAN_PASS}@${CF_PREFER_HOST}:443` +
-    `?security=tls&sni=${HOST}&type=ws&host=${HOST}` +
-    `&path=${encodeURIComponent(WS_PATH_TROJAN)}#${encodeURIComponent(NAME)}`
-  );
+    links.push(
+      `trojan://${TROJAN_PASS}@${CF_PREFER_HOST}:443` +
+      `?security=tls&sni=${HOST}&type=ws&host=${HOST}` +
+      `&path=${encodeURIComponent(WS_PATH_TROJAN)}#${encodeURIComponent(NAME)}`
+    );
+  }
 
   // Hysteria2（可选，UDP）
   if (hy2Active && PUBLIC_IP) {
@@ -649,7 +642,6 @@ async function main() {
   }
 
   // VLESS Reality（可选，TCP）
-  // ── 修复：订阅链接不传 sid 参数（服务端 short_id 为空字符串，客户端默认匹配）──
   if (realityActive && PUBLIC_IP && global.REALITY_PUB_KEY) {
     links.push(
       `vless://${UUID}@${PUBLIC_IP}:${REALITY_PORT}` +
@@ -683,13 +675,16 @@ async function main() {
 
   // 输出已启用协议汇总
   console.log('============== 已启用协议 ==============');
-  console.log(`✓ VMess  + WS + Argo TLS`);
-  console.log(`✓ VLESS  + WS + Argo TLS`);
-  console.log(`✓ Trojan + WS + Argo TLS`);
+  if (!DISABLE_ARGO) {
+    console.log(`✓ VMess  + WS + Argo TLS`);
+    console.log(`✓ VLESS  + WS + Argo TLS`);
+    console.log(`✓ Trojan + WS + Argo TLS`);
+  }
   if (hy2Active)     console.log(`✓ Hysteria2     端口 ${HY2_PORT} (UDP)`);
   if (tuicActive)    console.log(`✓ TUIC v5       端口 ${TUIC_PORT} (UDP)`);
   if (realityActive) console.log(`✓ VLESS Reality 端口 ${REALITY_PORT}  PubKey: ${global.REALITY_PUB_KEY || '生成中'}`);
   if (ssActive)      console.log(`✓ Shadowsocks   端口 ${SS_PORT} (TCP)  密码: ${SS_PASS}`);
+  if (DISABLE_ARGO)  console.log(`✗ Argo 隧道已禁用`);
   console.log('========================================');
 }
 
