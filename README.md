@@ -123,18 +123,6 @@ cd node-sb && node index.js
 
 ---
 
-## 订阅
-
-服务启动后，订阅地址为：
-
-```
-https://<argo-domain>/sub
-```
-
-订阅内容同时写入 `~/node-sb/sub.txt`，可用 `sb-sub` 命令查看。
-
----
-
 ## 伪装页
 
 默认伪装页为简单 Hello World，将自定义 `index.html` 放入运行目录即可替换。
