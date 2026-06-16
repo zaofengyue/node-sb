@@ -31,21 +31,15 @@ const SB_DIR          = `${HOME}/sing-box`;
 const SB_BIN_PATH     = `${SB_DIR}/sing-box`;
 const CLOUDFLARED_BIN = `${HOME}/cloudflared`;
 
-// Argo 三协议 WS 路径
 const WS_PATH_VMESS  = '/fengyue-vm';
 const WS_PATH_VLESS  = '/fengyue-vl';
 const WS_PATH_TROJAN = '/fengyue-tr';
 
-// Argo 三协议固定内部端口
 const V_VMESS_PORT  = 10000;
 const V_VLESS_PORT  = 10001;
 const V_TROJAN_PORT = 10002;
 
 const CF_PREFER_HOST = 'cdns.doon.eu.org';
-
-// ──────────────────────────────────────────────
-// 工具函数
-// ──────────────────────────────────────────────
 
 function getFreePort() {
   return new Promise((resolve) => {
@@ -76,21 +70,17 @@ function download(url, dest) {
   throw new Error(`下载失败: ${url}`);
 }
 
-// SS2022 密码：2022-blake3-aes-128-gcm 需要 16 字节 key，base64 后 24 字符
-// 取 UUID 去横线后前 32 个十六进制字符（即 16 字节）做 base64
 function deriveSSPassword(uuid) {
   const hex = uuid.replace(/-/g, '').slice(0, 32);
   return Buffer.from(hex, 'hex').toString('base64');
 }
 
-// 生成自签证书（Hysteria2 / TUIC 用）
 function generateSelfSignedCert(dir) {
   const keyPath  = `${dir}/key.pem`;
   const certPath = `${dir}/cert.pem`;
   if (fs.existsSync(keyPath) && fs.existsSync(certPath)) return { keyPath, certPath };
   fs.mkdirSync(dir, { recursive: true });
 
-  // 优先用 openssl 生成
   try {
     execSync(
       `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -days 3650 -nodes` +
@@ -101,7 +91,6 @@ function generateSelfSignedCert(dir) {
     return { keyPath, certPath };
   } catch {}
 
-  // openssl 不可用时使用预置证书兜底
   const PRESET_KEY = `-----BEGIN EC PARAMETERS-----
 BggqhkjOPQMBBw==
 -----END EC PARAMETERS-----
@@ -126,10 +115,6 @@ eQ6OFb9LbLYL9f+sAiAffoMbi4y/0YUSlTtz7as9S8/lciBF5VCUoVIKS+vX2g==
   fs.writeFileSync(certPath, PRESET_CERT);
   return { keyPath, certPath };
 }
-
-// ──────────────────────────────────────────────
-// 下载 sing-box
-// ──────────────────────────────────────────────
 
 async function downloadSingBox() {
   if (fs.existsSync(SB_BIN_PATH)) {
@@ -169,10 +154,6 @@ async function downloadSingBox() {
   return SB_BIN_PATH;
 }
 
-// ──────────────────────────────────────────────
-// 下载 cloudflared
-// ──────────────────────────────────────────────
-
 async function downloadCloudflared() {
   if (fs.existsSync(CLOUDFLARED_BIN)) {
     execSync(`chmod +x "${CLOUDFLARED_BIN}"`);
@@ -190,10 +171,6 @@ async function downloadCloudflared() {
   console.log('cloudflared 下载完成');
   return CLOUDFLARED_BIN;
 }
-
-// ──────────────────────────────────────────────
-// Argo 隧道
-// ──────────────────────────────────────────────
 
 function startArgoTunnel(cfBin, argoPort, argoDomain, argoAuth) {
   return new Promise((resolve) => {
@@ -232,25 +209,15 @@ function startArgoTunnel(cfBin, argoPort, argoDomain, argoAuth) {
   });
 }
 
-// ──────────────────────────────────────────────
-// 获取公网 IP
-// ──────────────────────────────────────────────
-
 async function getPublicIP() {
   return await httpGet('https://ipinfo.io/ip') ||
          await httpGet('https://ifconfig.co/ip') ||
          '';
 }
 
-// ──────────────────────────────────────────────
-// 主流程
-// ──────────────────────────────────────────────
-
 async function main() {
-  // ← 新增：读取 DISABLE_ARGO 开关，放在最前面
   const DISABLE_ARGO = PRESET_DISABLE_ARGO === 'true' || process.env.DISABLE_ARGO === 'true';
 
-  // UUID
   let UUID = PRESET_UUID || process.env.UUID || '';
   if (UUID) {
     fs.writeFileSync(UUID_FILE, UUID);
@@ -264,7 +231,6 @@ async function main() {
   const TROJAN_PASS = UUID;
   const SS_PASS     = deriveSSPassword(UUID);
 
-  // 对外端口（伪装页 + 订阅）
   const INBOUND_PORT = PRESET_PORT
     ? parseInt(PRESET_PORT)
     : process.env.PORT
@@ -281,7 +247,6 @@ async function main() {
     ? parseInt(PRESET_ARGO_PORT || process.env.ARGO_PORT || '8001')
     : await getFreePort();
 
-  // 可选协议端口（有值则启动，无值则跳过）
   const HY2_PORT_RAW     = PRESET_HY2_PORT     || process.env.HY2_PORT     || '';
   const TUIC_PORT_RAW    = PRESET_TUIC_PORT     || process.env.TUIC_PORT    || '';
   const REALITY_PORT_RAW = PRESET_REALITY_PORT  || process.env.REALITY_PORT || '';
@@ -294,7 +259,6 @@ async function main() {
 
   const REALITY_DOMAIN = PRESET_REALITY_DOMAIN || process.env.REALITY_DOMAIN || 'www.iij.ad.jp';
 
-  // 节点名称
   const COUNTRY = await httpGet('https://ipinfo.io/country') ||
                   await httpGet('https://ifconfig.co/country-iso') || '';
 
@@ -311,15 +275,11 @@ async function main() {
            COUNTRY ? `${COUNTRY}-sb` : 'sb';
   }
 
-  // 公网 IP（可选协议订阅需要）
   const PUBLIC_IP = (HY2_PORT || TUIC_PORT || REALITY_PORT || SS_PORT)
     ? await getPublicIP()
     : '';
 
-  // ── sing-box 配置 ──────────────────────────
-  // ← 改动：DISABLE_ARGO 为 true 时不加入 Argo 三协议 inbound
   const inbounds = DISABLE_ARGO ? [] : [
-    // Argo 三协议，固定内部端口
     {
       type: 'vmess',
       tag: 'vmess-in',
@@ -346,7 +306,6 @@ async function main() {
     }
   ];
 
-  // ── 先下载/找到 sing-box，Reality 密钥生成依赖它 ──
   let sbBin = '';
   if (fs.existsSync(SB_BIN_PATH)) {
     execSync(`chmod +x "${SB_BIN_PATH}"`);
@@ -358,7 +317,6 @@ async function main() {
   }
   if (!sbBin) sbBin = await downloadSingBox();
 
-  // ── 端口唯一性检测 ──────────────────────────────────────────────────────
   const usedPorts = new Set();
   function portOk(p, proto) {
     if (!p || isNaN(p)) return false;
@@ -379,7 +337,6 @@ async function main() {
   if (REALITY_PORT && !realityActive) console.warn(`警告: REALITY_PORT(${REALITY_PORT}) 端口冲突或无效，Reality 已跳过`);
   if (SS_PORT      && !ssActive)      console.warn(`警告: SS_PORT(${SS_PORT}) 端口冲突或无效，Shadowsocks 已跳过`);
 
-  // 自签证书（Hysteria2 / TUIC 需要）
   let certPath = '', keyPath = '';
   if (hy2Active || tuicActive) {
     const certDir = `${HOME}/certs`;
@@ -388,7 +345,6 @@ async function main() {
     keyPath  = cert.keyPath;
   }
 
-  // Hysteria2（可选，UDP）
   if (hy2Active) {
     console.log(`启用 Hysteria2，端口 ${HY2_PORT}`);
     inbounds.push({
@@ -396,6 +352,7 @@ async function main() {
       tag: 'hy2-in',
       listen: '::',
       listen_port: parseInt(HY2_PORT),
+      network: 'udp',
       users: [{ password: UUID }],
       masquerade: 'https://bing.com',
       tls: {
@@ -407,7 +364,7 @@ async function main() {
     });
   }
 
-  // TUIC v5（可选，UDP）
+  // 修复：TUIC users 加上 password 字段
   if (tuicActive) {
     console.log(`启用 TUIC v5，端口 ${TUIC_PORT}`);
     inbounds.push({
@@ -415,7 +372,8 @@ async function main() {
       tag: 'tuic-in',
       listen: '::',
       listen_port: parseInt(TUIC_PORT),
-      users: [{ uuid: UUID }],
+      network: 'udp',
+      users: [{ uuid: UUID, password: UUID }],
       congestion_control: 'bbr',
       tls: {
         enabled: true,
@@ -426,7 +384,6 @@ async function main() {
     });
   }
 
-  // VLESS Reality（可选，TCP）
   if (realityActive) {
     console.log(`启用 VLESS Reality，端口 ${REALITY_PORT}`);
 
@@ -491,7 +448,6 @@ async function main() {
     });
   }
 
-  // Shadowsocks 2022（可选，TCP）
   if (ssActive) {
     console.log(`启用 Shadowsocks 2022，端口 ${SS_PORT}`);
     inbounds.push({
@@ -531,8 +487,6 @@ async function main() {
 
   await new Promise(r => setTimeout(r, 1500));
 
-  // ── Node.js WS 反向代理（Argo 三协议路径分发）──
-  // ← 改动：DISABLE_ARGO 为 true 时跳过 argoServer 启动
   if (!DISABLE_ARGO) {
     const argoServer = http.createServer((req, res) => {
       res.writeHead(400);
@@ -566,7 +520,6 @@ async function main() {
     });
   }
 
-  // ── HTTP 服务（伪装页 + 订阅）──────────────
   const INDEX_HTML = fs.existsSync('./index.html')
     ? fs.readFileSync('./index.html', 'utf8')
     : '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Welcome</title></head>' +
@@ -587,8 +540,6 @@ async function main() {
     console.log(`HTTP 服务启动，端口 ${INBOUND_PORT}`);
   });
 
-  // ── 启动 cloudflared ───────────────────────
-  // ← 改动：DISABLE_ARGO 为 true 时跳过 cloudflared，HOST 用占位符
   let HOST = 'your-domain.com';
   if (!DISABLE_ARGO) {
     const cfBin    = await downloadCloudflared();
@@ -598,10 +549,8 @@ async function main() {
     console.log('Argo 隧道已禁用，跳过 cloudflared');
   }
 
-  // ── 生成订阅链接 ───────────────────────────
   const links = [];
 
-  // ← 改动：DISABLE_ARGO 为 true 时不生成 Argo 三协议订阅链接
   if (!DISABLE_ARGO) {
     const VMESS_OBJ = {
       v: '2', ps: NAME, add: CF_PREFER_HOST, port: '443',
@@ -623,7 +572,6 @@ async function main() {
     );
   }
 
-  // Hysteria2（可选，UDP）
   if (hy2Active && PUBLIC_IP) {
     links.push(
       `hysteria2://${UUID}@${PUBLIC_IP}:${HY2_PORT}` +
@@ -632,27 +580,26 @@ async function main() {
     );
   }
 
-  // TUIC v5（可选，UDP）
+  // 修复：TUIC 订阅链接加上密码字段
   if (tuicActive && PUBLIC_IP) {
     links.push(
-      `tuic://${UUID}:@${PUBLIC_IP}:${TUIC_PORT}` +
+      `tuic://${UUID}:${UUID}@${PUBLIC_IP}:${TUIC_PORT}` +
       `?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1` +
       `#${encodeURIComponent(NAME)}`
     );
   }
 
-  // VLESS Reality（可选，TCP）
+  // 修复：Reality 订阅链接加上 sid= 参数，兼容 Xray 内核客户端
   if (realityActive && PUBLIC_IP && global.REALITY_PUB_KEY) {
     links.push(
       `vless://${UUID}@${PUBLIC_IP}:${REALITY_PORT}` +
       `?encryption=none&flow=xtls-rprx-vision&security=reality` +
       `&sni=${REALITY_DOMAIN}&fp=firefox&pbk=${global.REALITY_PUB_KEY}` +
-      `&type=tcp&headerType=none` +
+      `&sid=&type=tcp&headerType=none` +
       `#${encodeURIComponent(NAME)}`
     );
   }
 
-  // Shadowsocks 2022（可选，TCP）
   if (ssActive && PUBLIC_IP) {
     const ssUserInfo = Buffer.from(`2022-blake3-aes-128-gcm:${SS_PASS}`).toString('base64');
     links.push(
@@ -673,7 +620,6 @@ async function main() {
   console.log(`订阅地址: https://${HOST}${SUB_PATH}`);
   console.log(`节点文件: ${SUB_FILE}`);
 
-  // 输出已启用协议汇总
   console.log('============== 已启用协议 ==============');
   if (!DISABLE_ARGO) {
     console.log(`✓ VMess  + WS + Argo TLS`);
