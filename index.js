@@ -415,7 +415,7 @@ async function main() {
       tag: 'tuic-in',
       listen: '::',
       listen_port: parseInt(TUIC_PORT),
-      users: [{ uuid: UUID }],
+      users: [{ uuid: UUID, password: UUID }],
       congestion_control: 'bbr',
       tls: {
         enabled: true,
@@ -635,7 +635,7 @@ async function main() {
   // TUIC v5（可选，UDP）
   if (tuicActive && PUBLIC_IP) {
     links.push(
-      `tuic://${UUID}:@${PUBLIC_IP}:${TUIC_PORT}` +
+      `tuic://${UUID}:${UUID}@${PUBLIC_IP}:${TUIC_PORT}` +
       `?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1` +
       `#${encodeURIComponent(NAME)}`
     );
