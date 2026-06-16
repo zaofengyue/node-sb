@@ -17,7 +17,46 @@ else
 fi
 
 if ! command -v node >/dev/null 2>&1; then
-  echo -e "${RED}缺少 node，请先安装 Node.js${NC}"; exit 1
+  echo -e "${YELLOW}未检测到 Node.js，尝试自动安装...${NC}"
+
+  # 优先尝试 nvm（无需 root）
+  if [ ! -f "$HOME/.nvm/nvm.sh" ]; then
+    echo -e "${YELLOW}正在安装 nvm...${NC}"
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash >/dev/null 2>&1
+  fi
+
+  if [ -f "$HOME/.nvm/nvm.sh" ]; then
+    export NVM_DIR="$HOME/.nvm"
+    source "$NVM_DIR/nvm.sh"
+    nvm install 20 >/dev/null 2>&1
+    nvm use 20 >/dev/null 2>&1
+    echo -e "${GREEN}Node.js $(node -v) 已通过 nvm 安装${NC}"
+
+  # 其次尝试 apt（需要 root）
+  elif command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+    echo -e "${YELLOW}正在通过 apt 安装 Node.js 20...${NC}"
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+    apt-get install -y nodejs >/dev/null 2>&1
+    echo -e "${GREEN}Node.js $(node -v) 已通过 apt 安装${NC}"
+
+  # 其次尝试 yum（需要 root）
+  elif command -v yum >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+    echo -e "${YELLOW}正在通过 yum 安装 Node.js 20...${NC}"
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+    yum install -y nodejs >/dev/null 2>&1
+    echo -e "${GREEN}Node.js $(node -v) 已通过 yum 安装${NC}"
+
+  else
+    echo -e "${RED}自动安装失败，请手动安装 Node.js 后重试${NC}"
+    echo -e "${YELLOW}参考: https://nodejs.org/en/download${NC}"
+    exit 1
+  fi
+
+  # 安装后再次检测
+  if ! command -v node >/dev/null 2>&1; then
+    echo -e "${RED}Node.js 安装失败，请手动安装后重试${NC}"
+    exit 1
+  fi
 fi
 
 APP_DIR="$HOME/node-sb"
@@ -729,13 +768,13 @@ EDITCMD
 chmod +x "$LOCAL_BIN/sb-edit"
 
 # ── PATH 注入 ────────────────────────────────────────────────────────────────
-if ! echo "$PATH" | grep -q "$LOCAL_BIN"; then
+export PATH="$LOCAL_BIN:$PATH"
+if ! grep -q "node-sb PATH" "$HOME/.bashrc" 2>/dev/null; then
   for RC in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.bash_profile" "$HOME/.zshrc"; do
     if [ -f "$RC" ]; then
       printf '\n# node-sb PATH\nexport PATH="%s:$PATH"\n' "$LOCAL_BIN" >> "$RC"
     fi
   done
-  export PATH="$LOCAL_BIN:$PATH"
 fi
 
 # ── 启动包装脚本 ─────────────────────────────────────────────────────────────
