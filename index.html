@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>项目部署面板 · 模板</title>
-<meta name="description" content="可复用的一键部署命令生成器模板：调整配置项，实时生成可粘贴到服务器执行的安装命令。">
+<title>node-sb 部署面板</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -25,138 +24,95 @@
   }
   *{margin:0;padding:0;box-sizing:border-box;}
   html{-webkit-font-smoothing:antialiased;}
-  body{
-    background:var(--bg-base);
-    color:var(--text);
-    font-family:var(--sans);
-    line-height:1.5;
-    min-height:100vh;
-    padding:40px 20px 90px;
-  }
+  body{background:var(--bg-base);color:var(--text);font-family:var(--sans);line-height:1.5;min-height:100vh;padding:40px 20px 90px;}
   .wrap{max-width:1100px;margin:0 auto;}
 
-  /* ---------- header ---------- */
   .header{margin-bottom:36px;}
-  .eyebrow{
-    font-family:var(--mono);
-    font-size:12px;
-    letter-spacing:.14em;
-    text-transform:uppercase;
-    color:var(--accent-2);
-    margin-bottom:12px;
-  }
-  .header h1{
-    font-family:var(--mono);
-    font-size:clamp(26px,4vw,38px);
-    font-weight:600;
-    letter-spacing:-.01em;
-    margin-bottom:14px;
-  }
-  .header p{
-    color:var(--text-muted);
-    max-width:640px;
-    font-size:14.5px;
-  }
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-2);margin-bottom:12px;}
+  .header h1{font-family:var(--mono);font-size:clamp(26px,4vw,38px);font-weight:600;letter-spacing:-.01em;margin-bottom:14px;}
+  .header p{color:var(--text-muted);max-width:640px;font-size:14.5px;}
 
-  /* ---------- layout ---------- */
   .layout{display:grid;grid-template-columns:1fr;gap:24px;}
   @media (min-width:960px){
     .layout{grid-template-columns:1.3fr 1fr;align-items:start;}
     .preview-col{position:sticky;top:24px;}
   }
 
-  /* ---------- section card ---------- */
-  .section{
-    background:var(--bg-panel);
-    border:1px solid var(--border);
-    border-radius:var(--radius);
-    padding:22px 22px 26px;
-    margin-bottom:20px;
-  }
-  .section-label{
-    font-family:var(--mono);
-    font-size:11.5px;
-    letter-spacing:.08em;
-    text-transform:uppercase;
-    color:var(--text-muted);
-    margin-bottom:6px;
-  }
+  .section{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius);padding:22px 22px 26px;margin-bottom:20px;}
+  .section-label{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;}
   .section-label .tag{color:var(--accent);}
+  .section-label .tag-blue{color:var(--accent-2);}
   .section h2{font-size:16px;font-weight:600;margin-bottom:16px;}
 
-  /* ---------- radio cards (必选项) ---------- */
-  .radio-group{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
-  .radio-card{
-    position:relative;
-    display:block;
-    border:1px solid var(--border);
-    background:var(--bg-elevated);
-    border-radius:8px;
-    padding:14px 16px;
-    cursor:pointer;
-    transition:border-color .15s,background .15s;
-  }
-  .radio-card input{position:absolute;width:1px;height:1px;opacity:0;}
-  .radio-card .name{display:block;font-weight:600;font-size:14px;margin-bottom:3px;}
-  .radio-card .hint{display:block;font-size:12px;color:var(--text-muted);font-family:var(--mono);}
-  .radio-card.selected{border-color:var(--accent);background:rgba(242,179,92,.08);}
-  .radio-card.selected::after{
-    content:'';position:absolute;top:12px;right:12px;
-    width:7px;height:7px;border-radius:50%;background:var(--accent);
-  }
-  .radio-card:focus-within{outline:2px solid var(--accent-2);outline-offset:2px;}
-
-  /* ---------- text fields (可选项) ---------- */
-  .field-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;}
+  .field-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;}
   .field{display:flex;flex-direction:column;gap:6px;}
   .field label{font-size:13px;font-weight:500;}
-  .field .desc{font-size:12px;color:var(--text-muted);}
+  .field .desc{font-size:12px;color:var(--text-muted);font-family:var(--mono);}
+  .field-hint{font-size:11.5px;color:var(--text-muted);font-family:var(--mono);margin-top:1px;}
   .field-input-row{display:flex;gap:8px;}
-  input[type=text],input[type=number],select{
-    background:var(--bg-elevated);
-    border:1px solid var(--border);
-    border-radius:7px;
-    padding:10px 12px;
-    color:var(--text);
-    font-family:var(--mono);
-    font-size:13px;
-    width:100%;
+  input[type=text],input[type=number]{
+    background:var(--bg-elevated);border:1px solid var(--border);border-radius:7px;
+    padding:10px 12px;color:var(--text);font-family:var(--mono);font-size:13px;width:100%;
   }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+  input[type=number]{-moz-appearance:textfield;}
   input::placeholder{color:#52605f;}
-  input:focus,select:focus{outline:2px solid var(--accent-2);outline-offset:1px;border-color:var(--accent-2);}
+  input:focus{outline:2px solid var(--accent-2);outline-offset:1px;border-color:var(--accent-2);}
   .btn-mini{
-    font-family:var(--sans);
-    font-size:12px;
-    padding:0 12px;
-    border-radius:7px;
-    border:1px solid var(--border);
-    background:var(--bg-elevated);
-    color:var(--accent-2);
-    cursor:pointer;
-    white-space:nowrap;
+    font-family:var(--sans);font-size:12px;padding:0 12px;border-radius:7px;
+    border:1px solid var(--border);background:var(--bg-elevated);color:var(--accent-2);
+    cursor:pointer;white-space:nowrap;
   }
   .btn-mini:hover{border-color:var(--accent-2);}
 
-  /* ---------- toggles (开关项) ---------- */
+  /* toggle */
   .toggle-list{display:flex;flex-direction:column;gap:16px;}
   .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:16px;}
   .toggle-row .name{font-size:14px;font-weight:500;}
-  .toggle-row .desc{font-size:12px;color:var(--text-muted);}
+  .toggle-row .desc{font-size:12px;color:var(--text-muted);font-family:var(--mono);}
   .switch{position:relative;width:44px;height:24px;flex-shrink:0;}
   .switch input{position:absolute;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;}
-  .switch .track{
-    position:absolute;inset:0;background:var(--bg-elevated);border:1px solid var(--border);
-    border-radius:999px;transition:background .15s,border-color .15s;
-  }
-  .switch .thumb{
-    position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
-    background:var(--text-muted);transition:transform .15s,background .15s;
-  }
+  .switch .track{position:absolute;inset:0;background:var(--bg-elevated);border:1px solid var(--border);border-radius:999px;transition:background .15s,border-color .15s;}
+  .switch .thumb{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--text-muted);transition:transform .15s,background .15s;}
   .switch input:checked + .track{background:rgba(95,211,196,.15);border-color:var(--accent-2);}
   .switch input:checked + .track .thumb{transform:translateX(20px);background:var(--accent-2);}
-  .switch input:focus-visible + .track{outline:2px solid var(--accent-2);outline-offset:2px;}
 
-  /* ---------- terminal preview ---------- */
+  /* protocol cards — click-to-random style */
+  .proto-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;}
+  .proto-card{
+    background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;
+    padding:14px 16px;display:flex;flex-direction:column;gap:10px;
+    transition:border-color .15s;
+  }
+  .proto-card.active{border-color:var(--accent-2);}
+  .proto-card-header{display:flex;align-items:center;justify-content:space-between;}
+  .proto-name{font-size:13px;font-weight:600;}
+  .proto-var{font-family:var(--mono);font-size:11px;color:var(--text-muted);}
+  .proto-port-display{
+    font-family:var(--mono);font-size:18px;font-weight:600;
+    color:var(--accent-2);letter-spacing:.04em;min-height:28px;
+    display:flex;align-items:center;
+  }
+  .proto-port-display.empty{color:var(--text-muted);font-size:13px;font-weight:400;}
+  .proto-actions{display:flex;gap:6px;}
+  .btn-proto{
+    flex:1;font-family:var(--sans);font-size:12px;padding:7px 0;border-radius:6px;
+    border:1px solid var(--border);background:var(--bg-panel);color:var(--text-muted);
+    cursor:pointer;transition:all .15s;text-align:center;
+  }
+  .btn-proto-rand{color:var(--accent-2);}
+  .btn-proto-rand:hover{border-color:var(--accent-2);color:var(--accent-2);background:rgba(95,211,196,.06);}
+  .btn-proto-clear{color:var(--danger);}
+  .btn-proto-clear:hover{border-color:var(--danger);background:rgba(232,131,111,.06);}
+  .btn-proto-clear:disabled{opacity:.3;cursor:default;pointer-events:none;}
+
+  /* Reality domain card — text input variant */
+  .proto-card.text-card .proto-port-display{display:none;}
+  .proto-card.text-card input{width:100%;font-size:13px;}
+  .proto-card.text-card .proto-actions{display:none;}
+
+  /* terminal */
   .terminal{background:#0a0e10;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
   .terminal-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-panel);border-bottom:1px solid var(--border);}
   .dot{width:10px;height:10px;border-radius:50%;}
@@ -164,7 +120,7 @@
   .dot-yellow{background:var(--accent);}
   .dot-green{background:var(--success);}
   .terminal-title{margin-left:6px;font-family:var(--mono);font-size:12px;color:var(--text-muted);}
-  .terminal-body{padding:20px 18px;font-family:var(--mono);font-size:13px;line-height:1.7;min-height:110px;white-space:pre-wrap;word-break:break-all;}
+  .terminal-body{padding:20px 18px;font-family:var(--mono);font-size:13px;line-height:1.7;min-height:120px;white-space:pre-wrap;word-break:break-all;}
   .prompt{color:var(--accent-2);margin-right:8px;}
   #command-output .var{color:var(--accent);}
   .cursor{display:inline-block;color:var(--accent-2);animation:blink 1s step-end infinite;}
@@ -181,12 +137,6 @@
   .btn-ghost{background:transparent;border-color:var(--border);color:var(--text-muted);}
   .btn-ghost:hover{color:var(--text);border-color:var(--text-muted);}
   .terminal-note{padding:0 18px 16px;font-size:12px;color:var(--text-muted);}
-
-  /* ---------- usage note ---------- */
-  .usage{margin-top:28px;font-size:13px;color:var(--text-muted);}
-  .usage h3{font-size:13px;color:var(--text);margin-bottom:10px;font-weight:600;}
-  .usage ol{padding-left:20px;display:flex;flex-direction:column;gap:6px;}
-  .usage code{font-family:var(--mono);color:var(--accent-2);background:var(--bg-elevated);padding:1px 5px;border-radius:4px;}
 </style>
 </head>
 <body>
@@ -194,119 +144,154 @@
 
   <div class="header">
     <div class="eyebrow">One-line Install · 配置生成器</div>
-    <h1>项目部署面板（模板）</h1>
-    <p>调整下方选项，右侧命令会自动更新；复制后粘贴到服务器终端回车即可。这是一个可直接复用的模板 — 把高亮的变量名和脚本地址换成你自己项目的，就是你的部署面板。</p>
+    <h1>项目部署面板</h1>
+    <p>调整下方选项，右侧命令实时更新；复制后粘贴到服务器终端回车即可。所有字段留空则使用脚本内置默认值。</p>
   </div>
 
   <div class="layout">
-    <!-- ============ 左侧：配置表单 ============ -->
     <div class="form-col">
 
+      <!-- 基础配置 -->
       <div class="section">
-        <div class="section-label"><span class="tag">必选</span> · 运行模式</div>
-        <h2>选择一种模式（单选）</h2>
-        <div class="radio-group">
-          <label class="radio-card">
-            <input type="radio" name="mode" value="std" checked>
-            <span class="name">标准模式</span>
-            <span class="hint">mode="std"</span>
-          </label>
-          <label class="radio-card">
-            <input type="radio" name="mode" value="perf">
-            <span class="name">性能模式</span>
-            <span class="hint">mode="perf"</span>
-          </label>
-          <label class="radio-card">
-            <input type="radio" name="mode" value="lite">
-            <span class="name">节能模式</span>
-            <span class="hint">mode="lite"</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-label"><span class="tag">可选</span> · 全局配置</div>
-        <h2>按需填写，留空则使用脚本默认值</h2>
+        <div class="section-label"><span class="tag">基础</span> · 核心配置</div>
+        <h2>全局参数</h2>
         <div class="field-row">
           <div class="field">
-            <label for="field-port">端口</label>
-            <input type="number" id="field-port" placeholder="默认随机">
-            <span class="desc">port</span>
-          </div>
-          <div class="field">
-            <label for="field-domain">域名</label>
-            <input type="text" id="field-domain" placeholder="example.com">
-            <span class="desc">domain</span>
-          </div>
-          <div class="field">
-            <label for="field-token">密钥 / Token</label>
+            <label for="field-uuid">UUID</label>
             <div class="field-input-row">
-              <input type="text" id="field-token" placeholder="留空自动生成">
-              <button type="button" class="btn-mini" id="gen-token">随机生成</button>
+              <input type="text" id="field-uuid" placeholder="自动生成并持久化">
+              <button type="button" class="btn-mini" id="gen-uuid">随机</button>
             </div>
-            <span class="desc">token</span>
+            <span class="desc">PRESET_UUID</span>
           </div>
           <div class="field">
-            <label for="field-export">导出格式</label>
-            <select id="field-export">
-              <option value="auto">自动</option>
-              <option value="json">JSON</option>
-              <option value="text">纯文本</option>
-            </select>
-            <span class="desc">export</span>
+            <label for="field-port">主端口</label>
+            <div class="field-input-row">
+              <input type="number" id="field-port" placeholder="自动分配">
+              <button type="button" class="btn-mini" id="gen-port">随机</button>
+            </div>
+            <span class="desc">PRESET_PORT</span>
+          </div>
+          <div class="field">
+            <label for="field-name">节点名称</label>
+            <input type="text" id="field-name" placeholder="自动识别">
+            <span class="desc">PRESET_NAME</span>
+          </div>
+          <div class="field">
+            <label for="field-sub">订阅路径</label>
+            <input type="text" id="field-sub" placeholder="默认 sub（即 /sub）">
+            <span class="desc">PRESET_SUB</span>
+          </div>
           </div>
         </div>
       </div>
 
+      <!-- Argo 配置 -->
       <div class="section">
-        <div class="section-label"><span class="tag">开关</span> · 功能选项</div>
-        <h2>按需开启</h2>
-        <div class="toggle-list">
-          <div class="toggle-row">
-            <div>
-              <div class="name">开启运行日志</div>
-              <div class="desc">log="1"</div>
+        <div class="section-label"><span class="tag-blue">Argo</span> · 隧道配置</div>
+        <h2>Argo 隧道参数</h2>
+        <div class="field-row">
+          <div class="field">
+            <label for="field-argo-port">Argo 端口</label>
+            <div class="field-input-row">
+              <input type="number" id="field-argo-port" placeholder="固定隧道默认 8001，临时随机">
+              <button type="button" class="btn-mini" id="gen-argo-port">随机</button>
             </div>
-            <div class="switch">
-              <input type="checkbox" id="toggle-log">
-              <div class="track"><div class="thumb"></div></div>
-            </div>
+            <span class="desc">PRESET_ARGO_PORT</span>
           </div>
-          <div class="toggle-row">
-            <div>
-              <div class="name">服务自启（重启后自动拉起）</div>
-              <div class="desc">autostart="1"</div>
-            </div>
-            <div class="switch">
-              <input type="checkbox" id="toggle-autostart">
-              <div class="track"><div class="thumb"></div></div>
-            </div>
+          <div class="field">
+            <label for="field-argo-domain">Argo 域名</label>
+            <input type="text" id="field-argo-domain" placeholder="空则使用临时隧道">
+            <span class="desc">PRESET_ARGO_DOMAIN</span>
           </div>
-          <div class="toggle-row">
-            <div>
-              <div class="name">启用实验性功能</div>
-              <div class="desc">exp="1"</div>
-            </div>
-            <div class="switch">
-              <input type="checkbox" id="toggle-experimental">
-              <div class="track"><div class="thumb"></div></div>
+          <div class="field">
+            <label for="field-argo-auth">Argo Token / JSON</label>
+            <input type="text" id="field-argo-auth" placeholder="空则使用临时隧道">
+            <span class="desc">PRESET_ARGO_AUTH</span>
+          </div>
+        </div>
+        <div style="margin-top:20px;">
+          <div class="toggle-list">
+            <div class="toggle-row">
+              <div>
+                <div class="name">禁用 Argo</div>
+                <div class="desc">PRESET_DISABLE_ARGO="true"</div>
+              </div>
+              <div class="switch">
+                <input type="checkbox" id="toggle-disable-argo">
+                <div class="track"><div class="thumb"></div></div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="usage">
-        <h3>如何接入你自己的项目</h3>
-        <ol>
-          <li>把你的部署脚本放到一个公开可访问的地址（GitHub Raw、对象存储、自己的服务器都行），替换代码里的 <code>SCRIPT_URL</code>。</li>
-          <li>把每个表单项对应到脚本里真正读取的环境变量名；脚本里建议都用 <code>${VAR:-默认值}</code> 兜底，避免变量为空时报错。</li>
-          <li>这个文件本身就是一个可直接发布的静态页面：当作 <code>index.html</code> 扔进 GitHub Pages / Cloudflare Pages / Vercel 即可，不需要任何后端。</li>
-        </ol>
+      <!-- 可选协议 -->
+      <div class="section">
+        <div class="section-label"><span class="tag">可选</span> · 协议端口</div>
+        <h2>协议端口</h2>
+        <div class="proto-grid">
+
+          <div class="proto-card" id="card-hy2">
+            <div class="proto-card-header">
+              <span class="proto-name">Hysteria2</span>
+              <span class="proto-var">PRESET_HY2_PORT</span>
+            </div>
+            <div class="field-input-row">
+              <input type="number" id="input-hy2" placeholder="留空不启用">
+              <button type="button" class="btn-mini btn-proto-rand" data-key="hy2">生成</button>
+            </div>
+          </div>
+
+          <div class="proto-card" id="card-tuic">
+            <div class="proto-card-header">
+              <span class="proto-name">TUIC</span>
+              <span class="proto-var">PRESET_TUIC_PORT</span>
+            </div>
+            <div class="field-input-row">
+              <input type="number" id="input-tuic" placeholder="留空不启用">
+              <button type="button" class="btn-mini btn-proto-rand" data-key="tuic">生成</button>
+            </div>
+          </div>
+
+          <div class="proto-card" id="card-reality">
+            <div class="proto-card-header">
+              <span class="proto-name">Reality</span>
+              <span class="proto-var">PRESET_REALITY_PORT</span>
+            </div>
+            <div class="field-input-row">
+              <input type="number" id="input-reality" placeholder="留空不启用">
+              <button type="button" class="btn-mini btn-proto-rand" data-key="reality">生成</button>
+            </div>
+          </div>
+
+          <div class="proto-card" id="card-ss">
+            <div class="proto-card-header">
+              <span class="proto-name">Shadowsocks</span>
+              <span class="proto-var">PRESET_SS_PORT</span>
+            </div>
+            <div class="field-input-row">
+              <input type="number" id="input-ss" placeholder="留空不启用">
+              <button type="button" class="btn-mini btn-proto-rand" data-key="ss">生成</button>
+            </div>
+          </div>
+
+          <!-- Reality 域名单独一格，文本输入 -->
+          <div class="proto-card" style="grid-column:span 2;">
+            <div class="proto-card-header" style="margin-bottom:8px;">
+              <span class="proto-name">Reality 伪装域名</span>
+              <span class="proto-var">PRESET_REALITY_DOMAIN</span>
+            </div>
+            <input type="text" id="field-reality-domain" placeholder="默认 www.iij.ad.jp">
+            <span class="field-hint" style="font-size:11.5px;color:var(--text-muted);font-family:var(--mono);margin-top:4px;display:block;">
+          </div>
+
+        </div>
       </div>
 
     </div>
 
-    <!-- ============ 右侧：命令预览 ============ -->
+    <!-- 右侧终端预览 -->
     <div class="preview-col">
       <div class="terminal">
         <div class="terminal-bar">
@@ -319,7 +304,7 @@
           <span class="prompt">$</span><span id="command-output"></span><span class="cursor">▌</span>
         </div>
         <div class="terminal-actions">
-          <div class="segmented" id="cmd-type-toggle">
+          <div class="segmented">
             <button type="button" class="seg-btn active" data-type="curl">curl</button>
             <button type="button" class="seg-btn" data-type="wget">wget</button>
           </div>
@@ -332,152 +317,164 @@
   </div>
 
 </div>
-
 <script>
 (function(){
-  // ============================================================
-  // 🔧 自定义区域 1：换成你自己脚本的公开地址
-  // ============================================================
-  const SCRIPT_URL = 'https://raw.githubusercontent.com/yourname/yourproject/main/deploy.sh';
+  // 🔧 项目部署地址
+  const SCRIPT_URL = 'bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)';
 
   const state = {
-    mode:'std', port:'', domain:'', token:'', exportFormat:'auto',
-    log:false, autostart:false, experimental:false,
+    uuid:'', port:'', name:'', sub:'',
+    argoPort:'', argoDomain:'', argoAuth:'', disableArgo:false,
+    hy2:'', tuic:'', reality:'', realityDomain:'', ss:'',
     cmdType:'curl'
   };
 
-  const els = {
-    radios: document.querySelectorAll('input[name="mode"]'),
-    radioCards: document.querySelectorAll('.radio-card'),
-    port: document.getElementById('field-port'),
-    domain: document.getElementById('field-domain'),
-    token: document.getElementById('field-token'),
-    genToken: document.getElementById('gen-token'),
-    exportFormat: document.getElementById('field-export'),
-    log: document.getElementById('toggle-log'),
-    autostart: document.getElementById('toggle-autostart'),
-    experimental: document.getElementById('toggle-experimental'),
-    output: document.getElementById('command-output'),
-    copyBtn: document.getElementById('copy-btn'),
-    resetBtn: document.getElementById('reset-btn'),
-    segBtns: document.querySelectorAll('.seg-btn')
-  };
+  function randPort(){ return String(10000 + Math.floor(Math.random() * 55535)); }
 
-  function escapeHtml(str){
-    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // ============================================================
-  // 🔧 自定义区域 2：把表单字段映射成脚本真正读取的变量名
-  // 这里返回 [变量名, 值] 的数组，按需增删
-  // ============================================================
   function buildPairs(){
-    const pairs = [];
-    pairs.push(['mode', state.mode]); // 必选项，永远带上
-    if(state.port) pairs.push(['port', state.port]);
-    if(state.domain) pairs.push(['domain', state.domain]);
-    if(state.token) pairs.push(['token', state.token]);
-    if(state.exportFormat !== 'auto') pairs.push(['export', state.exportFormat]);
-    if(state.log) pairs.push(['log', '1']);
-    if(state.autostart) pairs.push(['autostart', '1']);
-    if(state.experimental) pairs.push(['exp', '1']);
-    return pairs;
+    const p=[];
+    if(state.uuid)          p.push(['PRESET_UUID',          state.uuid]);
+    if(state.port)          p.push(['PRESET_PORT',          state.port]);
+    if(state.name)          p.push(['PRESET_NAME',          state.name]);
+    if(state.sub)           p.push(['PRESET_SUB',           state.sub]);
+    if(state.argoPort)      p.push(['PRESET_ARGO_PORT',     state.argoPort]);
+    if(state.argoDomain)    p.push(['PRESET_ARGO_DOMAIN',   state.argoDomain]);
+    if(state.argoAuth)      p.push(['PRESET_ARGO_AUTH',     state.argoAuth]);
+    if(state.disableArgo)   p.push(['PRESET_DISABLE_ARGO',  'true']);
+    if(state.hy2)           p.push(['PRESET_HY2_PORT',      state.hy2]);
+    if(state.tuic)          p.push(['PRESET_TUIC_PORT',     state.tuic]);
+    if(state.reality)       p.push(['PRESET_REALITY_PORT',  state.reality]);
+    if(state.realityDomain) p.push(['PRESET_REALITY_DOMAIN',state.realityDomain]);
+    if(state.ss)            p.push(['PRESET_SS_PORT',       state.ss]);
+    return p;
   }
 
   function fetcherText(escaped){
-    const url = escaped ? escapeHtml(SCRIPT_URL) : SCRIPT_URL;
-    const lt = escaped ? '&lt;' : '<';
-    return state.cmdType === 'curl'
+    const url=escaped?escapeHtml(SCRIPT_URL):SCRIPT_URL;
+    const lt=escaped?'&lt;':'<';
+    return state.cmdType==='curl'
       ? `bash ${lt}(curl -Ls ${url})`
       : `bash ${lt}(wget -qO- ${url})`;
   }
 
   function plainCommand(){
-    const pairs = buildPairs();
-    const varPart = pairs.map(([k,v]) => `${k}="${v}"`).join(' ');
-    return (varPart ? varPart + ' ' : '') + fetcherText(false);
+    const pairs=buildPairs();
+    const v=pairs.map(([k,v])=>`${k}="${v}"`).join(' ');
+    return (v?v+' ':'')+fetcherText(false);
   }
 
   function render(){
-    const pairs = buildPairs();
-    const varHtml = pairs.map(([k,v]) =>
-      `<span class="var">${escapeHtml(k)}</span>="${escapeHtml(v)}"`
-    ).join(' ');
-    els.output.innerHTML = (varHtml ? varHtml + ' ' : '') + fetcherText(true);
+    const pairs=buildPairs();
+    const html=pairs.map(([k,v])=>`<span class="var">${escapeHtml(k)}</span>="${escapeHtml(v)}"`).join(' ');
+    document.getElementById('command-output').innerHTML=(html?html+' ':'')+fetcherText(true);
   }
 
-  function syncRadioCards(){
-    els.radioCards.forEach(card => {
-      card.classList.toggle('selected', card.querySelector('input').checked);
+  // 协议卡片：随机按钮 + input 事件
+  const protoKeys=['hy2','tuic','reality','ss'];
+  function updateProtoCard(key){
+    const card=document.getElementById('card-'+key);
+    if(state[key]) card.classList.add('active');
+    else card.classList.remove('active');
+  }
+
+  // 随机按钮
+  document.querySelectorAll('.btn-proto-rand').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const key=btn.dataset.key;
+      const p=randPort();
+      state[key]=p;
+      document.getElementById('input-'+key).value=p;
+      updateProtoCard(key);
+      render();
     });
-  }
-
-  els.radios.forEach(r => r.addEventListener('change', e => {
-    state.mode = e.target.value;
-    syncRadioCards();
-    render();
-  }));
-
-  els.port.addEventListener('input', e => { state.port = e.target.value.trim(); render(); });
-  els.domain.addEventListener('input', e => { state.domain = e.target.value.trim(); render(); });
-  els.token.addEventListener('input', e => { state.token = e.target.value.trim(); render(); });
-  els.exportFormat.addEventListener('change', e => { state.exportFormat = e.target.value; render(); });
-
-  els.genToken.addEventListener('click', () => {
-    const bytes = new Uint8Array(8);
-    (window.crypto || window.msCrypto).getRandomValues(bytes);
-    const token = Array.from(bytes, b => b.toString(16).padStart(2,'0')).join('');
-    els.token.value = token;
-    state.token = token;
-    render();
   });
 
-  function bindToggle(input, key){
-    input.addEventListener('change', e => { state[key] = e.target.checked; render(); });
-  }
-  bindToggle(els.log, 'log');
-  bindToggle(els.autostart, 'autostart');
-  bindToggle(els.experimental, 'experimental');
+  // 手动输入
+  protoKeys.forEach(key=>{
+    document.getElementById('input-'+key).addEventListener('input',e=>{
+      state[key]=e.target.value.trim();
+      updateProtoCard(key);
+      render();
+    });
+  });
 
-  els.segBtns.forEach(btn => btn.addEventListener('click', () => {
-    state.cmdType = btn.dataset.type;
-    els.segBtns.forEach(b => b.classList.toggle('active', b === btn));
-    render();
-  }));
+  // 主端口随机
+  document.getElementById('gen-port').addEventListener('click',()=>{
+    const p=randPort();
+    document.getElementById('field-port').value=p;
+    state.port=p; render();
+  });
 
-  els.copyBtn.addEventListener('click', async () => {
-    const text = plainCommand();
-    try{
-      await navigator.clipboard.writeText(text);
-    }catch(e){
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
+  // Argo 端口随机
+  document.getElementById('gen-argo-port').addEventListener('click',()=>{
+    const p=randPort();
+    document.getElementById('field-argo-port').value=p;
+    state.argoPort=p; render();
+  });
+
+  // UUID 随机
+  document.getElementById('gen-uuid').addEventListener('click',()=>{
+    const b=new Uint8Array(16);
+    crypto.getRandomValues(b);
+    b[6]=(b[6]&0x0f)|0x40; b[8]=(b[8]&0x3f)|0x80;
+    const h=Array.from(b,x=>x.toString(16).padStart(2,'0'));
+    const uuid=`${h.slice(0,4).join('')}-${h.slice(4,6).join('')}-${h.slice(6,8).join('')}-${h.slice(8,10).join('')}-${h.slice(10).join('')}`;
+    document.getElementById('field-uuid').value=uuid;
+    state.uuid=uuid; render();
+  });
+
+  // 文本输入
+  [
+    ['field-uuid','uuid'],['field-port','port'],['field-name','name'],['field-sub','sub'],
+    ['field-argo-port','argoPort'],['field-argo-domain','argoDomain'],['field-argo-auth','argoAuth'],
+    ['field-reality-domain','realityDomain'],
+  ].forEach(([id,key])=>{
+    document.getElementById(id).addEventListener('input',e=>{state[key]=e.target.value.trim();render();});
+  });
+
+  // Argo 开关
+  document.getElementById('toggle-disable-argo').addEventListener('change',e=>{
+    state.disableArgo=e.target.checked; render();
+  });
+
+  // curl/wget 切换
+  document.querySelectorAll('.seg-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      state.cmdType=btn.dataset.type;
+      document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active',b===btn));
+      render();
+    });
+  });
+
+  // 复制
+  document.getElementById('copy-btn').addEventListener('click',async()=>{
+    const text=plainCommand();
+    try{ await navigator.clipboard.writeText(text); }
+    catch(e){
+      const ta=document.createElement('textarea');
+      ta.value=text;ta.style.cssText='position:fixed;opacity:0';
+      document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
     }
-    els.copyBtn.textContent = '✓ 已复制';
-    els.copyBtn.classList.add('copied');
-    setTimeout(() => {
-      els.copyBtn.textContent = '复制命令';
-      els.copyBtn.classList.remove('copied');
-    }, 1600);
+    const btn=document.getElementById('copy-btn');
+    btn.textContent='✓ 已复制';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='复制命令';btn.classList.remove('copied');},1600);
   });
 
-  els.resetBtn.addEventListener('click', () => {
-    state.port=''; state.domain=''; state.token=''; state.exportFormat='auto';
-    state.log=false; state.autostart=false; state.experimental=false; state.mode='std';
-    els.port.value=''; els.domain.value=''; els.token.value=''; els.exportFormat.value='auto';
-    els.log.checked=false; els.autostart.checked=false; els.experimental.checked=false;
-    document.querySelector('input[name="mode"][value="std"]').checked = true;
-    syncRadioCards();
+  // 重置
+  document.getElementById('reset-btn').addEventListener('click',()=>{
+    Object.keys(state).forEach(k=>{state[k]=k==='cmdType'?'curl':k==='disableArgo'?false:'';});
+    ['field-uuid','field-port','field-name','field-sub','field-argo-port','field-argo-domain','field-argo-auth','field-reality-domain']
+      .forEach(id=>{ document.getElementById(id).value=''; });
+    document.getElementById('toggle-disable-argo').checked=false;
+    protoKeys.forEach(k=>{ document.getElementById('input-'+k).value=''; updateProtoCard(k); });
+    document.querySelectorAll('.seg-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
     render();
   });
 
-  syncRadioCards();
   render();
 })();
 </script>
