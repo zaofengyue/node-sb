@@ -66,7 +66,6 @@
   }
   .btn-mini:hover{border-color:var(--accent-2);}
 
-  /* toggle */
   .toggle-list{display:flex;flex-direction:column;gap:16px;}
   .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:16px;}
   .toggle-row .name{font-size:14px;font-weight:500;}
@@ -78,7 +77,6 @@
   .switch input:checked + .track{background:rgba(95,211,196,.15);border-color:var(--accent-2);}
   .switch input:checked + .track .thumb{transform:translateX(20px);background:var(--accent-2);}
 
-  /* protocol cards — click-to-random style */
   .proto-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;}
   .proto-card{
     background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;
@@ -107,12 +105,10 @@
   .btn-proto-clear:hover{border-color:var(--danger);background:rgba(232,131,111,.06);}
   .btn-proto-clear:disabled{opacity:.3;cursor:default;pointer-events:none;}
 
-  /* Reality domain card — text input variant */
   .proto-card.text-card .proto-port-display{display:none;}
   .proto-card.text-card input{width:100%;font-size:13px;}
   .proto-card.text-card .proto-actions{display:none;}
 
-  /* terminal */
   .terminal{background:#0a0e10;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
   .terminal-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-panel);border-bottom:1px solid var(--border);}
   .dot{width:10px;height:10px;border-radius:50%;}
@@ -144,14 +140,13 @@
 
   <div class="header">
     <div class="eyebrow">One-line Install · 配置生成器</div>
-    <h1>项目部署面板</h1>
+    <h1>node-sb 部署面板</h1>
     <p>调整下方选项，右侧命令实时更新；复制后粘贴到服务器终端回车即可。所有字段留空则使用脚本内置默认值。</p>
   </div>
 
   <div class="layout">
     <div class="form-col">
 
-      <!-- 基础配置 -->
       <div class="section">
         <div class="section-label"><span class="tag">基础</span> · 核心配置</div>
         <h2>全局参数</h2>
@@ -162,31 +157,29 @@
               <input type="text" id="field-uuid" placeholder="自动生成并持久化">
               <button type="button" class="btn-mini" id="gen-uuid">随机</button>
             </div>
-            <span class="desc">PRESET_UUID</span>
+            <span class="desc">UUID</span>
           </div>
           <div class="field">
             <label for="field-port">主端口</label>
             <div class="field-input-row">
               <input type="number" id="field-port" placeholder="自动分配">
-              <button type="button" class="btn-mini" id="gen-port">随机</button>
+              <button type="button" class="btn-mini" id="gen-port">生成</button>
             </div>
-            <span class="desc">PRESET_PORT</span>
+            <span class="desc">PORT</span>
           </div>
           <div class="field">
             <label for="field-name">节点名称</label>
             <input type="text" id="field-name" placeholder="自动识别">
-            <span class="desc">PRESET_NAME</span>
+            <span class="desc">NAME</span>
           </div>
           <div class="field">
             <label for="field-sub">订阅路径</label>
             <input type="text" id="field-sub" placeholder="默认 sub（即 /sub）">
-            <span class="desc">PRESET_SUB</span>
-          </div>
+            <span class="desc">SUB</span>
           </div>
         </div>
       </div>
 
-      <!-- Argo 配置 -->
       <div class="section">
         <div class="section-label"><span class="tag-blue">Argo</span> · 隧道配置</div>
         <h2>Argo 隧道参数</h2>
@@ -195,19 +188,19 @@
             <label for="field-argo-port">Argo 端口</label>
             <div class="field-input-row">
               <input type="number" id="field-argo-port" placeholder="固定隧道默认 8001，临时随机">
-              <button type="button" class="btn-mini" id="gen-argo-port">随机</button>
+              <button type="button" class="btn-mini" id="gen-argo-port">生成</button>
             </div>
-            <span class="desc">PRESET_ARGO_PORT</span>
+            <span class="desc">ARGO_PORT</span>
           </div>
           <div class="field">
             <label for="field-argo-domain">Argo 域名</label>
             <input type="text" id="field-argo-domain" placeholder="空则使用临时隧道">
-            <span class="desc">PRESET_ARGO_DOMAIN</span>
+            <span class="desc">ARGO_DOMAIN</span>
           </div>
           <div class="field">
             <label for="field-argo-auth">Argo Token / JSON</label>
             <input type="text" id="field-argo-auth" placeholder="空则使用临时隧道">
-            <span class="desc">PRESET_ARGO_AUTH</span>
+            <span class="desc">ARGO_AUTH</span>
           </div>
         </div>
         <div style="margin-top:20px;">
@@ -215,7 +208,7 @@
             <div class="toggle-row">
               <div>
                 <div class="name">禁用 Argo</div>
-                <div class="desc">PRESET_DISABLE_ARGO="true"</div>
+                <div class="desc">DISABLE_ARGO=true</div>
               </div>
               <div class="switch">
                 <input type="checkbox" id="toggle-disable-argo">
@@ -226,7 +219,6 @@
         </div>
       </div>
 
-      <!-- 可选协议 -->
       <div class="section">
         <div class="section-label"><span class="tag">可选</span> · 协议端口</div>
         <h2>协议端口</h2>
@@ -235,7 +227,7 @@
           <div class="proto-card" id="card-hy2">
             <div class="proto-card-header">
               <span class="proto-name">Hysteria2</span>
-              <span class="proto-var">PRESET_HY2_PORT</span>
+              <span class="proto-var">HY2_PORT</span>
             </div>
             <div class="field-input-row">
               <input type="number" id="input-hy2" placeholder="留空不启用">
@@ -246,7 +238,7 @@
           <div class="proto-card" id="card-tuic">
             <div class="proto-card-header">
               <span class="proto-name">TUIC</span>
-              <span class="proto-var">PRESET_TUIC_PORT</span>
+              <span class="proto-var">TUIC_PORT</span>
             </div>
             <div class="field-input-row">
               <input type="number" id="input-tuic" placeholder="留空不启用">
@@ -257,7 +249,7 @@
           <div class="proto-card" id="card-reality">
             <div class="proto-card-header">
               <span class="proto-name">Reality</span>
-              <span class="proto-var">PRESET_REALITY_PORT</span>
+              <span class="proto-var">REALITY_PORT</span>
             </div>
             <div class="field-input-row">
               <input type="number" id="input-reality" placeholder="留空不启用">
@@ -268,7 +260,7 @@
           <div class="proto-card" id="card-ss">
             <div class="proto-card-header">
               <span class="proto-name">Shadowsocks</span>
-              <span class="proto-var">PRESET_SS_PORT</span>
+              <span class="proto-var">SS_PORT</span>
             </div>
             <div class="field-input-row">
               <input type="number" id="input-ss" placeholder="留空不启用">
@@ -276,14 +268,12 @@
             </div>
           </div>
 
-          <!-- Reality 域名单独一格，文本输入 -->
           <div class="proto-card" style="grid-column:span 2;">
             <div class="proto-card-header" style="margin-bottom:8px;">
               <span class="proto-name">Reality 伪装域名</span>
-              <span class="proto-var">PRESET_REALITY_DOMAIN</span>
+              <span class="proto-var">REALITY_DOMAIN</span>
             </div>
             <input type="text" id="field-reality-domain" placeholder="默认 www.iij.ad.jp">
-            <span class="field-hint" style="font-size:11.5px;color:var(--text-muted);font-family:var(--mono);margin-top:4px;display:block;">
           </div>
 
         </div>
@@ -291,7 +281,6 @@
 
     </div>
 
-    <!-- 右侧终端预览 -->
     <div class="preview-col">
       <div class="terminal">
         <div class="terminal-bar">
@@ -319,8 +308,7 @@
 </div>
 <script>
 (function(){
-  // 🔧 项目部署地址
-  const SCRIPT_URL = 'bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)';
+  const SCRIPT_URL = 'https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh';
 
   const state = {
     uuid:'', port:'', name:'', sub:'',
@@ -335,143 +323,147 @@
     return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  // 值含空格或特殊字符时加引号
+  function quoteVal(v){
+    return /[\s"'\\]/.test(v) ? `"${v.replace(/"/g,'\\"')}"` : v;
+  }
+  function quoteValHtml(v){
+    return /[\s"'\\]/.test(v) ? `"${escapeHtml(v.replace(/"/g,'\\"'))}"` : escapeHtml(v);
+  }
+
   function buildPairs(){
     const p=[];
-    if(state.uuid)          p.push(['PRESET_UUID',          state.uuid]);
-    if(state.port)          p.push(['PRESET_PORT',          state.port]);
-    if(state.name)          p.push(['PRESET_NAME',          state.name]);
-    if(state.sub)           p.push(['PRESET_SUB',           state.sub]);
-    if(state.argoPort)      p.push(['PRESET_ARGO_PORT',     state.argoPort]);
-    if(state.argoDomain)    p.push(['PRESET_ARGO_DOMAIN',   state.argoDomain]);
-    if(state.argoAuth)      p.push(['PRESET_ARGO_AUTH',     state.argoAuth]);
-    if(state.disableArgo)   p.push(['PRESET_DISABLE_ARGO',  'true']);
-    if(state.hy2)           p.push(['PRESET_HY2_PORT',      state.hy2]);
-    if(state.tuic)          p.push(['PRESET_TUIC_PORT',     state.tuic]);
-    if(state.reality)       p.push(['PRESET_REALITY_PORT',  state.reality]);
-    if(state.realityDomain) p.push(['PRESET_REALITY_DOMAIN',state.realityDomain]);
-    if(state.ss)            p.push(['PRESET_SS_PORT',       state.ss]);
+    if(state.uuid)          p.push(['UUID',          state.uuid]);
+    if(state.port)          p.push(['PORT',          state.port]);
+    if(state.name)          p.push(['NAME',          state.name]);
+    if(state.sub)           p.push(['SUB',           state.sub]);
+    if(state.argoPort)      p.push(['ARGO_PORT',     state.argoPort]);
+    if(state.argoDomain)    p.push(['ARGO_DOMAIN',   state.argoDomain]);
+    if(state.argoAuth)      p.push(['ARGO_AUTH',     state.argoAuth]);
+    if(state.disableArgo)   p.push(['DISABLE_ARGO',  'true']);
+    if(state.hy2)           p.push(['HY2_PORT',      state.hy2]);
+    if(state.tuic)          p.push(['TUIC_PORT',     state.tuic]);
+    if(state.reality)       p.push(['REALITY_PORT',  state.reality]);
+    if(state.realityDomain) p.push(['REALITY_DOMAIN',state.realityDomain]);
+    if(state.ss)            p.push(['SS_PORT',       state.ss]);
     return p;
   }
 
-  function fetcherText(escaped){
-    const url=escaped?escapeHtml(SCRIPT_URL):SCRIPT_URL;
-    const lt=escaped?'&lt;':'<';
-    return state.cmdType==='curl'
-      ? `bash ${lt}(curl -Ls ${url})`
-      : `bash ${lt}(wget -qO- ${url})`;
+  function fetcherText(){
+    const lt = '&lt;';
+    return state.cmdType === 'curl'
+      ? `bash ${lt}(curl -sL ${escapeHtml(SCRIPT_URL)})`
+      : `bash ${lt}(wget -qO- ${escapeHtml(SCRIPT_URL)})`;
+  }
+  function fetcherPlain(){
+    return state.cmdType === 'curl'
+      ? `bash <(curl -sL ${SCRIPT_URL})`
+      : `bash <(wget -qO- ${SCRIPT_URL})`;
   }
 
   function plainCommand(){
-    const pairs=buildPairs();
-    const v=pairs.map(([k,v])=>`${k}="${v}"`).join(' ');
-    return (v?v+' ':'')+fetcherText(false);
+    const pairs = buildPairs();
+    const v = pairs.map(([k,v]) => `${k}=${quoteVal(v)}`).join(' ');
+    return (v ? v + ' ' : '') + fetcherPlain();
   }
 
   function render(){
-    const pairs=buildPairs();
-    const html=pairs.map(([k,v])=>`<span class="var">${escapeHtml(k)}</span>="${escapeHtml(v)}"`).join(' ');
-    document.getElementById('command-output').innerHTML=(html?html+' ':'')+fetcherText(true);
+    const pairs = buildPairs();
+    const html = pairs.map(([k,v]) =>
+      `<span class="var">${escapeHtml(k)}</span>=${quoteValHtml(v)}`
+    ).join(' ');
+    document.getElementById('command-output').innerHTML =
+      (html ? html + ' ' : '') + fetcherText();
   }
 
-  // 协议卡片：随机按钮 + input 事件
-  const protoKeys=['hy2','tuic','reality','ss'];
+  const protoKeys = ['hy2','tuic','reality','ss'];
   function updateProtoCard(key){
-    const card=document.getElementById('card-'+key);
+    const card = document.getElementById('card-' + key);
     if(state[key]) card.classList.add('active');
     else card.classList.remove('active');
   }
 
-  // 随机按钮
-  document.querySelectorAll('.btn-proto-rand').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      const key=btn.dataset.key;
-      const p=randPort();
-      state[key]=p;
-      document.getElementById('input-'+key).value=p;
+  document.querySelectorAll('.btn-proto-rand').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      const p = randPort();
+      state[key] = p;
+      document.getElementById('input-' + key).value = p;
       updateProtoCard(key);
       render();
     });
   });
 
-  // 手动输入
-  protoKeys.forEach(key=>{
-    document.getElementById('input-'+key).addEventListener('input',e=>{
-      state[key]=e.target.value.trim();
+  protoKeys.forEach(key => {
+    document.getElementById('input-' + key).addEventListener('input', e => {
+      state[key] = e.target.value.trim();
       updateProtoCard(key);
       render();
     });
   });
 
-  // 主端口随机
-  document.getElementById('gen-port').addEventListener('click',()=>{
-    const p=randPort();
-    document.getElementById('field-port').value=p;
-    state.port=p; render();
+  document.getElementById('gen-port').addEventListener('click', () => {
+    const p = randPort();
+    document.getElementById('field-port').value = p;
+    state.port = p; render();
   });
 
-  // Argo 端口随机
-  document.getElementById('gen-argo-port').addEventListener('click',()=>{
-    const p=randPort();
-    document.getElementById('field-argo-port').value=p;
-    state.argoPort=p; render();
+  document.getElementById('gen-argo-port').addEventListener('click', () => {
+    const p = randPort();
+    document.getElementById('field-argo-port').value = p;
+    state.argoPort = p; render();
   });
 
-  // UUID 随机
-  document.getElementById('gen-uuid').addEventListener('click',()=>{
-    const b=new Uint8Array(16);
+  document.getElementById('gen-uuid').addEventListener('click', () => {
+    const b = new Uint8Array(16);
     crypto.getRandomValues(b);
-    b[6]=(b[6]&0x0f)|0x40; b[8]=(b[8]&0x3f)|0x80;
-    const h=Array.from(b,x=>x.toString(16).padStart(2,'0'));
-    const uuid=`${h.slice(0,4).join('')}-${h.slice(4,6).join('')}-${h.slice(6,8).join('')}-${h.slice(8,10).join('')}-${h.slice(10).join('')}`;
-    document.getElementById('field-uuid').value=uuid;
-    state.uuid=uuid; render();
+    b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, x => x.toString(16).padStart(2, '0'));
+    const uuid = `${h.slice(0,4).join('')}-${h.slice(4,6).join('')}-${h.slice(6,8).join('')}-${h.slice(8,10).join('')}-${h.slice(10).join('')}`;
+    document.getElementById('field-uuid').value = uuid;
+    state.uuid = uuid; render();
   });
 
-  // 文本输入
   [
     ['field-uuid','uuid'],['field-port','port'],['field-name','name'],['field-sub','sub'],
     ['field-argo-port','argoPort'],['field-argo-domain','argoDomain'],['field-argo-auth','argoAuth'],
     ['field-reality-domain','realityDomain'],
-  ].forEach(([id,key])=>{
-    document.getElementById(id).addEventListener('input',e=>{state[key]=e.target.value.trim();render();});
+  ].forEach(([id, key]) => {
+    document.getElementById(id).addEventListener('input', e => { state[key] = e.target.value.trim(); render(); });
   });
 
-  // Argo 开关
-  document.getElementById('toggle-disable-argo').addEventListener('change',e=>{
-    state.disableArgo=e.target.checked; render();
+  document.getElementById('toggle-disable-argo').addEventListener('change', e => {
+    state.disableArgo = e.target.checked; render();
   });
 
-  // curl/wget 切换
-  document.querySelectorAll('.seg-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      state.cmdType=btn.dataset.type;
-      document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active',b===btn));
+  document.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.cmdType = btn.dataset.type;
+      document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
       render();
     });
   });
 
-  // 复制
-  document.getElementById('copy-btn').addEventListener('click',async()=>{
-    const text=plainCommand();
-    try{ await navigator.clipboard.writeText(text); }
-    catch(e){
-      const ta=document.createElement('textarea');
-      ta.value=text;ta.style.cssText='position:fixed;opacity:0';
-      document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+  document.getElementById('copy-btn').addEventListener('click', async () => {
+    const text = plainCommand();
+    try { await navigator.clipboard.writeText(text); }
+    catch(e) {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
     }
-    const btn=document.getElementById('copy-btn');
-    btn.textContent='✓ 已复制';btn.classList.add('copied');
-    setTimeout(()=>{btn.textContent='复制命令';btn.classList.remove('copied');},1600);
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '✓ 已复制'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '复制命令'; btn.classList.remove('copied'); }, 1600);
   });
 
-  // 重置
-  document.getElementById('reset-btn').addEventListener('click',()=>{
-    Object.keys(state).forEach(k=>{state[k]=k==='cmdType'?'curl':k==='disableArgo'?false:'';});
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    Object.keys(state).forEach(k => { state[k] = k === 'cmdType' ? 'curl' : k === 'disableArgo' ? false : ''; });
     ['field-uuid','field-port','field-name','field-sub','field-argo-port','field-argo-domain','field-argo-auth','field-reality-domain']
-      .forEach(id=>{ document.getElementById(id).value=''; });
-    document.getElementById('toggle-disable-argo').checked=false;
-    protoKeys.forEach(k=>{ document.getElementById('input-'+k).value=''; updateProtoCard(k); });
-    document.querySelectorAll('.seg-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
+      .forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('toggle-disable-argo').checked = false;
+    protoKeys.forEach(k => { document.getElementById('input-' + k).value = ''; updateProtoCard(k); });
+    document.querySelectorAll('.seg-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
     render();
   });
 
