@@ -141,7 +141,7 @@
   <div class="header">
     <div class="eyebrow">One-line Install · 配置生成器</div>
     <h1>node-sb 部署面板</h1>
-    <p>调整下方选项，右侧命令实时更新；复制后粘贴到服务器终端回车即可。留空则使用脚本内置默认值。</p>
+    <p>调整下方选项，右侧命令实时更新；复制后粘贴到服务器终端回车即可。所有字段留空则使用脚本内置默认值。</p>
   </div>
 
   <div class="layout">
@@ -163,6 +163,7 @@
             <label for="field-port">主端口</label>
             <div class="field-input-row">
               <input type="number" id="field-port" placeholder="默认 3000">
+              <button type="button" class="btn-mini" id="gen-port">生成</button>
             </div>
             <span class="desc">PORT</span>
           </div>
@@ -187,6 +188,7 @@
             <label for="field-argo-port">Argo 端口</label>
             <div class="field-input-row">
               <input type="number" id="field-argo-port" placeholder="固定隧道默认 8001，临时随机">
+              <button type="button" class="btn-mini" id="gen-argo-port">生成</button>
             </div>
             <span class="desc">ARGO_PORT</span>
           </div>
