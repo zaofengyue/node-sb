@@ -1,367 +1,485 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Letters Across the Ocean</title>
-
+<title>项目部署面板 · 模板</title>
+<meta name="description" content="可复用的一键部署命令生成器模板：调整配置项，实时生成可粘贴到服务器执行的安装命令。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{
-    --sand:#f8f4ee;
-    --paper:#fffdf9;
-    --ocean:#6c9db5;
-    --deep:#466b82;
-    --text:#3d3d3d;
-    --muted:#8a8a8a;
-    --line:#e8e0d4;
-}
-
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-}
-
-body{
-    font-family: Georgia, serif;
-    background: var(--sand);
-    color: var(--text);
-    line-height: 1.9;
-}
-
-.hero{
+  :root{
+    --bg-base:#0f1416;
+    --bg-panel:#161d20;
+    --bg-elevated:#1d2528;
+    --accent:#f2b35c;
+    --accent-2:#5fd3c4;
+    --text:#e9e5d6;
+    --text-muted:#7c8a8d;
+    --border:#2a3336;
+    --success:#8bc78a;
+    --danger:#e8836f;
+    --radius:10px;
+    --mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{-webkit-font-smoothing:antialiased;}
+  body{
+    background:var(--bg-base);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
     min-height:100vh;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    text-align:center;
-    padding:40px;
-    background:
-        linear-gradient(
-            rgba(248,244,238,.82),
-            rgba(248,244,238,.92)
-        ),
-        url("https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=1800&q=80");
-    background-size:cover;
-    background-position:center;
-}
+    padding:40px 20px 90px;
+  }
+  .wrap{max-width:1100px;margin:0 auto;}
 
-.hero-content{
-    max-width:800px;
-}
-
-.hero small{
-    letter-spacing:4px;
+  /* ---------- header ---------- */
+  .header{margin-bottom:36px;}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
     text-transform:uppercase;
-    color:var(--ocean);
-}
+    color:var(--accent-2);
+    margin-bottom:12px;
+  }
+  .header h1{
+    font-family:var(--mono);
+    font-size:clamp(26px,4vw,38px);
+    font-weight:600;
+    letter-spacing:-.01em;
+    margin-bottom:14px;
+  }
+  .header p{
+    color:var(--text-muted);
+    max-width:640px;
+    font-size:14.5px;
+  }
 
-.hero h1{
-    font-size:clamp(3rem,8vw,6rem);
-    font-weight:400;
-    margin:20px 0;
-}
+  /* ---------- layout ---------- */
+  .layout{display:grid;grid-template-columns:1fr;gap:24px;}
+  @media (min-width:960px){
+    .layout{grid-template-columns:1.3fr 1fr;align-items:start;}
+    .preview-col{position:sticky;top:24px;}
+  }
 
-.hero p{
-    color:#555;
-    font-size:1.1rem;
-    max-width:650px;
-    margin:auto;
-}
-
-.wave-divider{
-    height:100px;
-    background:
-    radial-gradient(circle at 20px 20px, transparent 20px, #f8f4ee 21px);
-}
-
-.container{
-    max-width:1000px;
-    margin:auto;
-    padding:100px 25px;
-}
-
-.section-title{
-    text-align:center;
-    margin-bottom:80px;
-}
-
-.section-title span{
-    color:var(--ocean);
-    letter-spacing:3px;
+  /* ---------- section card ---------- */
+  .section{
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:22px 22px 26px;
+    margin-bottom:20px;
+  }
+  .section-label{
+    font-family:var(--mono);
+    font-size:11.5px;
+    letter-spacing:.08em;
     text-transform:uppercase;
-    font-size:.8rem;
-}
+    color:var(--text-muted);
+    margin-bottom:6px;
+  }
+  .section-label .tag{color:var(--accent);}
+  .section h2{font-size:16px;font-weight:600;margin-bottom:16px;}
 
-.section-title h2{
-    font-size:3rem;
-    font-weight:400;
-    margin-top:15px;
-}
-
-.letter{
-    background:var(--paper);
-    border:1px solid var(--line);
-    padding:45px;
-    margin-bottom:40px;
-    box-shadow:0 10px 30px rgba(0,0,0,.04);
+  /* ---------- radio cards (必选项) ---------- */
+  .radio-group{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
+  .radio-card{
     position:relative;
-}
-
-.letter:before{
-    content:"✉";
-    position:absolute;
-    top:20px;
-    right:25px;
-    font-size:1.3rem;
-    color:#d6c7b5;
-}
-
-.letter-header{
-    color:var(--ocean);
-    margin-bottom:20px;
-    font-size:.85rem;
-    letter-spacing:2px;
-    text-transform:uppercase;
-}
-
-.letter h3{
-    font-size:2rem;
-    font-weight:400;
-    margin-bottom:20px;
-}
-
-.quote{
-    text-align:center;
-    max-width:800px;
-    margin:100px auto;
-    font-size:2rem;
-    color:var(--deep);
-    font-style:italic;
-}
-
-.quote::before{
-    content:"❝";
     display:block;
-    font-size:4rem;
-    margin-bottom:15px;
-    opacity:.3;
-}
+    border:1px solid var(--border);
+    background:var(--bg-elevated);
+    border-radius:8px;
+    padding:14px 16px;
+    cursor:pointer;
+    transition:border-color .15s,background .15s;
+  }
+  .radio-card input{position:absolute;width:1px;height:1px;opacity:0;}
+  .radio-card .name{display:block;font-weight:600;font-size:14px;margin-bottom:3px;}
+  .radio-card .hint{display:block;font-size:12px;color:var(--text-muted);font-family:var(--mono);}
+  .radio-card.selected{border-color:var(--accent);background:rgba(242,179,92,.08);}
+  .radio-card.selected::after{
+    content:'';position:absolute;top:12px;right:12px;
+    width:7px;height:7px;border-radius:50%;background:var(--accent);
+  }
+  .radio-card:focus-within{outline:2px solid var(--accent-2);outline-offset:2px;}
 
-.grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-    gap:30px;
-}
+  /* ---------- text fields (可选项) ---------- */
+  .field-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;}
+  .field{display:flex;flex-direction:column;gap:6px;}
+  .field label{font-size:13px;font-weight:500;}
+  .field .desc{font-size:12px;color:var(--text-muted);}
+  .field-input-row{display:flex;gap:8px;}
+  input[type=text],input[type=number],select{
+    background:var(--bg-elevated);
+    border:1px solid var(--border);
+    border-radius:7px;
+    padding:10px 12px;
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:13px;
+    width:100%;
+  }
+  input::placeholder{color:#52605f;}
+  input:focus,select:focus{outline:2px solid var(--accent-2);outline-offset:1px;border-color:var(--accent-2);}
+  .btn-mini{
+    font-family:var(--sans);
+    font-size:12px;
+    padding:0 12px;
+    border-radius:7px;
+    border:1px solid var(--border);
+    background:var(--bg-elevated);
+    color:var(--accent-2);
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .btn-mini:hover{border-color:var(--accent-2);}
 
-.card{
-    background:white;
-    padding:30px;
-    border:1px solid var(--line);
-}
+  /* ---------- toggles (开关项) ---------- */
+  .toggle-list{display:flex;flex-direction:column;gap:16px;}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .toggle-row .name{font-size:14px;font-weight:500;}
+  .toggle-row .desc{font-size:12px;color:var(--text-muted);}
+  .switch{position:relative;width:44px;height:24px;flex-shrink:0;}
+  .switch input{position:absolute;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;}
+  .switch .track{
+    position:absolute;inset:0;background:var(--bg-elevated);border:1px solid var(--border);
+    border-radius:999px;transition:background .15s,border-color .15s;
+  }
+  .switch .thumb{
+    position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+    background:var(--text-muted);transition:transform .15s,background .15s;
+  }
+  .switch input:checked + .track{background:rgba(95,211,196,.15);border-color:var(--accent-2);}
+  .switch input:checked + .track .thumb{transform:translateX(20px);background:var(--accent-2);}
+  .switch input:focus-visible + .track{outline:2px solid var(--accent-2);outline-offset:2px;}
 
-.card h4{
-    font-size:1.4rem;
-    margin-bottom:15px;
-    font-weight:400;
-}
+  /* ---------- terminal preview ---------- */
+  .terminal{background:#0a0e10;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  .terminal-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-panel);border-bottom:1px solid var(--border);}
+  .dot{width:10px;height:10px;border-radius:50%;}
+  .dot-red{background:var(--danger);}
+  .dot-yellow{background:var(--accent);}
+  .dot-green{background:var(--success);}
+  .terminal-title{margin-left:6px;font-family:var(--mono);font-size:12px;color:var(--text-muted);}
+  .terminal-body{padding:20px 18px;font-family:var(--mono);font-size:13px;line-height:1.7;min-height:110px;white-space:pre-wrap;word-break:break-all;}
+  .prompt{color:var(--accent-2);margin-right:8px;}
+  #command-output .var{color:var(--accent);}
+  .cursor{display:inline-block;color:var(--accent-2);animation:blink 1s step-end infinite;}
+  @media (prefers-reduced-motion:reduce){.cursor{animation:none;}}
+  @keyframes blink{50%{opacity:0;}}
+  .terminal-actions{display:flex;align-items:center;gap:10px;padding:14px 18px;border-top:1px solid var(--border);flex-wrap:wrap;}
+  .segmented{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;}
+  .seg-btn{font-family:var(--mono);font-size:12px;padding:7px 14px;background:var(--bg-elevated);color:var(--text-muted);border:none;cursor:pointer;}
+  .seg-btn.active{background:var(--accent);color:#1a1303;font-weight:600;}
+  .btn{font-family:var(--sans);font-size:13px;font-weight:600;padding:9px 16px;border-radius:7px;border:1px solid transparent;cursor:pointer;}
+  .btn-accent{background:var(--accent);color:#1a1303;}
+  .btn-accent:hover{filter:brightness(1.08);}
+  .btn-accent.copied{background:var(--success);}
+  .btn-ghost{background:transparent;border-color:var(--border);color:var(--text-muted);}
+  .btn-ghost:hover{color:var(--text);border-color:var(--text-muted);}
+  .terminal-note{padding:0 18px 16px;font-size:12px;color:var(--text-muted);}
 
-.card p{
-    color:#666;
-}
-
-.footer{
-    text-align:center;
-    padding:80px 20px;
-    border-top:1px solid var(--line);
-}
-
-.footer h3{
-    font-size:2rem;
-    font-weight:400;
-    margin-bottom:10px;
-}
-
-.footer p{
-    color:var(--muted);
-}
-
-.signature{
-    margin-top:25px;
-    color:var(--deep);
-    font-style:italic;
-}
-
-@media(max-width:768px){
-
-.hero h1{
-    font-size:3.5rem;
-}
-
-.section-title h2{
-    font-size:2.2rem;
-}
-
-.quote{
-    font-size:1.4rem;
-}
-
-.letter{
-    padding:30px;
-}
-}
+  /* ---------- usage note ---------- */
+  .usage{margin-top:28px;font-size:13px;color:var(--text-muted);}
+  .usage h3{font-size:13px;color:var(--text);margin-bottom:10px;font-weight:600;}
+  .usage ol{padding-left:20px;display:flex;flex-direction:column;gap:6px;}
+  .usage code{font-family:var(--mono);color:var(--accent-2);background:var(--bg-elevated);padding:1px 5px;border-radius:4px;}
 </style>
 </head>
 <body>
+<div class="wrap">
 
-<section class="hero">
+  <div class="header">
+    <div class="eyebrow">One-line Install · 配置生成器</div>
+    <h1>项目部署面板（模板）</h1>
+    <p>调整下方选项，右侧命令会自动更新；复制后粘贴到服务器终端回车即可。这是一个可直接复用的模板 — 把高亮的变量名和脚本地址换成你自己项目的，就是你的部署面板。</p>
+  </div>
 
-    <div class="hero-content">
+  <div class="layout">
+    <!-- ============ 左侧：配置表单 ============ -->
+    <div class="form-col">
 
-        <small>Letters Across the Ocean</small>
+      <div class="section">
+        <div class="section-label"><span class="tag">必选</span> · 运行模式</div>
+        <h2>选择一种模式（单选）</h2>
+        <div class="radio-group">
+          <label class="radio-card">
+            <input type="radio" name="mode" value="std" checked>
+            <span class="name">标准模式</span>
+            <span class="hint">mode="std"</span>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="mode" value="perf">
+            <span class="name">性能模式</span>
+            <span class="hint">mode="perf"</span>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="mode" value="lite">
+            <span class="name">节能模式</span>
+            <span class="hint">mode="lite"</span>
+          </label>
+        </div>
+      </div>
 
-        <h1>Messages Carried by the Sea</h1>
+      <div class="section">
+        <div class="section-label"><span class="tag">可选</span> · 全局配置</div>
+        <h2>按需填写，留空则使用脚本默认值</h2>
+        <div class="field-row">
+          <div class="field">
+            <label for="field-port">端口</label>
+            <input type="number" id="field-port" placeholder="默认随机">
+            <span class="desc">port</span>
+          </div>
+          <div class="field">
+            <label for="field-domain">域名</label>
+            <input type="text" id="field-domain" placeholder="example.com">
+            <span class="desc">domain</span>
+          </div>
+          <div class="field">
+            <label for="field-token">密钥 / Token</label>
+            <div class="field-input-row">
+              <input type="text" id="field-token" placeholder="留空自动生成">
+              <button type="button" class="btn-mini" id="gen-token">随机生成</button>
+            </div>
+            <span class="desc">token</span>
+          </div>
+          <div class="field">
+            <label for="field-export">导出格式</label>
+            <select id="field-export">
+              <option value="auto">自动</option>
+              <option value="json">JSON</option>
+              <option value="text">纯文本</option>
+            </select>
+            <span class="desc">export</span>
+          </div>
+        </div>
+      </div>
 
-        <p>
-            A collection of gentle letters, drifting across distant waters.
-            Some are written for strangers. Some are written for ourselves.
-            All are meant to bring comfort to those who find them.
-        </p>
+      <div class="section">
+        <div class="section-label"><span class="tag">开关</span> · 功能选项</div>
+        <h2>按需开启</h2>
+        <div class="toggle-list">
+          <div class="toggle-row">
+            <div>
+              <div class="name">开启运行日志</div>
+              <div class="desc">log="1"</div>
+            </div>
+            <div class="switch">
+              <input type="checkbox" id="toggle-log">
+              <div class="track"><div class="thumb"></div></div>
+            </div>
+          </div>
+          <div class="toggle-row">
+            <div>
+              <div class="name">服务自启（重启后自动拉起）</div>
+              <div class="desc">autostart="1"</div>
+            </div>
+            <div class="switch">
+              <input type="checkbox" id="toggle-autostart">
+              <div class="track"><div class="thumb"></div></div>
+            </div>
+          </div>
+          <div class="toggle-row">
+            <div>
+              <div class="name">启用实验性功能</div>
+              <div class="desc">exp="1"</div>
+            </div>
+            <div class="switch">
+              <input type="checkbox" id="toggle-experimental">
+              <div class="track"><div class="thumb"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="usage">
+        <h3>如何接入你自己的项目</h3>
+        <ol>
+          <li>把你的部署脚本放到一个公开可访问的地址（GitHub Raw、对象存储、自己的服务器都行），替换代码里的 <code>SCRIPT_URL</code>。</li>
+          <li>把每个表单项对应到脚本里真正读取的环境变量名；脚本里建议都用 <code>${VAR:-默认值}</code> 兜底，避免变量为空时报错。</li>
+          <li>这个文件本身就是一个可直接发布的静态页面：当作 <code>index.html</code> 扔进 GitHub Pages / Cloudflare Pages / Vercel 即可，不需要任何后端。</li>
+        </ol>
+      </div>
 
     </div>
 
-</section>
-
-<div class="wave-divider"></div>
-
-<main class="container">
-
-    <div class="section-title">
-        <span>Found Bottles</span>
-        <h2>Letters Washed Ashore</h2>
+    <!-- ============ 右侧：命令预览 ============ -->
+    <div class="preview-col">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot dot-red"></span>
+          <span class="dot dot-yellow"></span>
+          <span class="dot dot-green"></span>
+          <span class="terminal-title">deploy.sh</span>
+        </div>
+        <div class="terminal-body">
+          <span class="prompt">$</span><span id="command-output"></span><span class="cursor">▌</span>
+        </div>
+        <div class="terminal-actions">
+          <div class="segmented" id="cmd-type-toggle">
+            <button type="button" class="seg-btn active" data-type="curl">curl</button>
+            <button type="button" class="seg-btn" data-type="wget">wget</button>
+          </div>
+          <button type="button" class="btn btn-accent" id="copy-btn">复制命令</button>
+          <button type="button" class="btn btn-ghost" id="reset-btn">重置</button>
+        </div>
+        <div class="terminal-note">服务器没有 curl 时，切到 wget 再复制。</div>
+      </div>
     </div>
+  </div>
 
-    <article class="letter">
+</div>
 
-        <div class="letter-header">
-            Letter #001 · To Whoever Needs This
-        </div>
+<script>
+(function(){
+  // ============================================================
+  // 🔧 自定义区域 1：换成你自己脚本的公开地址
+  // ============================================================
+  const SCRIPT_URL = 'https://raw.githubusercontent.com/yourname/yourproject/main/deploy.sh';
 
-        <h3>You Are Allowed to Rest</h3>
+  const state = {
+    mode:'std', port:'', domain:'', token:'', exportFormat:'auto',
+    log:false, autostart:false, experimental:false,
+    cmdType:'curl'
+  };
 
-        <p>
-            If you found this message today, consider it a reminder:
-            not every day must be productive.
-        </p>
+  const els = {
+    radios: document.querySelectorAll('input[name="mode"]'),
+    radioCards: document.querySelectorAll('.radio-card'),
+    port: document.getElementById('field-port'),
+    domain: document.getElementById('field-domain'),
+    token: document.getElementById('field-token'),
+    genToken: document.getElementById('gen-token'),
+    exportFormat: document.getElementById('field-export'),
+    log: document.getElementById('toggle-log'),
+    autostart: document.getElementById('toggle-autostart'),
+    experimental: document.getElementById('toggle-experimental'),
+    output: document.getElementById('command-output'),
+    copyBtn: document.getElementById('copy-btn'),
+    resetBtn: document.getElementById('reset-btn'),
+    segBtns: document.querySelectorAll('.seg-btn')
+  };
 
-        <p>
-            The ocean does not rush its tides,
-            and trees do not apologize for growing slowly.
-            You do not need to earn your worth through constant effort.
-        </p>
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
 
-        <div class="signature">
-            — From a traveler beyond the horizon
-        </div>
+  // ============================================================
+  // 🔧 自定义区域 2：把表单字段映射成脚本真正读取的变量名
+  // 这里返回 [变量名, 值] 的数组，按需增删
+  // ============================================================
+  function buildPairs(){
+    const pairs = [];
+    pairs.push(['mode', state.mode]); // 必选项，永远带上
+    if(state.port) pairs.push(['port', state.port]);
+    if(state.domain) pairs.push(['domain', state.domain]);
+    if(state.token) pairs.push(['token', state.token]);
+    if(state.exportFormat !== 'auto') pairs.push(['export', state.exportFormat]);
+    if(state.log) pairs.push(['log', '1']);
+    if(state.autostart) pairs.push(['autostart', '1']);
+    if(state.experimental) pairs.push(['exp', '1']);
+    return pairs;
+  }
 
-    </article>
+  function fetcherText(escaped){
+    const url = escaped ? escapeHtml(SCRIPT_URL) : SCRIPT_URL;
+    const lt = escaped ? '&lt;' : '<';
+    return state.cmdType === 'curl'
+      ? `bash ${lt}(curl -Ls ${url})`
+      : `bash ${lt}(wget -qO- ${url})`;
+  }
 
-    <article class="letter">
+  function plainCommand(){
+    const pairs = buildPairs();
+    const varPart = pairs.map(([k,v]) => `${k}="${v}"`).join(' ');
+    return (varPart ? varPart + ' ' : '') + fetcherText(false);
+  }
 
-        <div class="letter-header">
-            Letter #014 · A Quiet Evening
-        </div>
+  function render(){
+    const pairs = buildPairs();
+    const varHtml = pairs.map(([k,v]) =>
+      `<span class="var">${escapeHtml(k)}</span>="${escapeHtml(v)}"`
+    ).join(' ');
+    els.output.innerHTML = (varHtml ? varHtml + ' ' : '') + fetcherText(true);
+  }
 
-        <h3>The People Who Stay</h3>
+  function syncRadioCards(){
+    els.radioCards.forEach(card => {
+      card.classList.toggle('selected', card.querySelector('input').checked);
+    });
+  }
 
-        <p>
-            Some people arrive like waves,
-            touching our lives briefly before returning to sea.
-        </p>
+  els.radios.forEach(r => r.addEventListener('change', e => {
+    state.mode = e.target.value;
+    syncRadioCards();
+    render();
+  }));
 
-        <p>
-            Others become anchors,
-            remaining even when storms appear.
-            Treasure those who choose to stay.
-        </p>
+  els.port.addEventListener('input', e => { state.port = e.target.value.trim(); render(); });
+  els.domain.addEventListener('input', e => { state.domain = e.target.value.trim(); render(); });
+  els.token.addEventListener('input', e => { state.token = e.target.value.trim(); render(); });
+  els.exportFormat.addEventListener('change', e => { state.exportFormat = e.target.value; render(); });
 
-        <div class="signature">
-            — Written beneath a lighthouse
-        </div>
+  els.genToken.addEventListener('click', () => {
+    const bytes = new Uint8Array(8);
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    const token = Array.from(bytes, b => b.toString(16).padStart(2,'0')).join('');
+    els.token.value = token;
+    state.token = token;
+    render();
+  });
 
-    </article>
+  function bindToggle(input, key){
+    input.addEventListener('change', e => { state[key] = e.target.checked; render(); });
+  }
+  bindToggle(els.log, 'log');
+  bindToggle(els.autostart, 'autostart');
+  bindToggle(els.experimental, 'experimental');
 
-    <article class="letter">
+  els.segBtns.forEach(btn => btn.addEventListener('click', () => {
+    state.cmdType = btn.dataset.type;
+    els.segBtns.forEach(b => b.classList.toggle('active', b === btn));
+    render();
+  }));
 
-        <div class="letter-header">
-            Letter #027 · Unknown Origin
-        </div>
+  els.copyBtn.addEventListener('click', async () => {
+    const text = plainCommand();
+    try{
+      await navigator.clipboard.writeText(text);
+    }catch(e){
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    els.copyBtn.textContent = '✓ 已复制';
+    els.copyBtn.classList.add('copied');
+    setTimeout(() => {
+      els.copyBtn.textContent = '复制命令';
+      els.copyBtn.classList.remove('copied');
+    }, 1600);
+  });
 
-        <h3>Tomorrow Is Still Unwritten</h3>
+  els.resetBtn.addEventListener('click', () => {
+    state.port=''; state.domain=''; state.token=''; state.exportFormat='auto';
+    state.log=false; state.autostart=false; state.experimental=false; state.mode='std';
+    els.port.value=''; els.domain.value=''; els.token.value=''; els.exportFormat.value='auto';
+    els.log.checked=false; els.autostart.checked=false; els.experimental.checked=false;
+    document.querySelector('input[name="mode"][value="std"]').checked = true;
+    syncRadioCards();
+    render();
+  });
 
-        <p>
-            The future can feel like an endless ocean.
-            Vast. Uncertain. Mysterious.
-        </p>
-
-        <p>
-            But every journey begins with a single wave.
-            You do not need to know the entire route
-            to take the next step.
-        </p>
-
-        <div class="signature">
-            — A message sealed with hope
-        </div>
-
-    </article>
-
-    <div class="quote">
-        Somewhere across the ocean,
-        another person is hoping for the same peace you seek.
-    </div>
-
-    <div class="section-title">
-        <span>Collected Notes</span>
-        <h2>Small Comforts</h2>
-    </div>
-
-    <section class="grid">
-
-        <div class="card">
-            <h4>Sunrise</h4>
-            <p>
-                Every morning is proof that endings are not permanent.
-            </p>
-        </div>
-
-        <div class="card">
-            <h4>Rain</h4>
-            <p>
-                Some storms arrive only to make room for clearer skies.
-            </p>
-        </div>
-
-        <div class="card">
-            <h4>Waves</h4>
-            <p>
-                The sea teaches us that returning is just as natural as leaving.
-            </p>
-        </div>
-
-    </section>
-
-</main>
-
-<footer class="footer">
-
-    <h3>Letters Across the Ocean</h3>
-
-    <p>
-        A place for gentle thoughts, drifting endlessly across the sea.
-    </p>
-
-</footer>
-
+  syncRadioCards();
+  render();
+})();
+</script>
 </body>
 </html>
