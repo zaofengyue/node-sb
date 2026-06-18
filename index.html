@@ -66,16 +66,18 @@
   }
   .btn-mini:hover{border-color:var(--accent-2);}
 
+  /* toggle */
   .toggle-list{display:flex;flex-direction:column;gap:16px;}
   .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:16px;}
   .toggle-row .name{font-size:14px;font-weight:500;}
   .toggle-row .desc{font-size:12px;color:var(--text-muted);font-family:var(--mono);}
-  .switch{position:relative;width:44px;height:24px;flex-shrink:0;}
-  .switch input{position:absolute;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;}
-  .switch .track{position:absolute;inset:0;background:var(--bg-elevated);border:1px solid var(--border);border-radius:999px;transition:background .15s,border-color .15s;}
+  /* 修复开关：用 label 包裹，pointer-events 正确响应 */
+  .switch{position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer;}
+  .switch input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;z-index:2;}
+  .switch .track{position:absolute;inset:0;background:var(--bg-elevated);border:1px solid var(--border);border-radius:999px;transition:background .15s,border-color .15s;z-index:1;}
   .switch .thumb{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--text-muted);transition:transform .15s,background .15s;}
-  .switch input:checked + .track{background:rgba(95,211,196,.15);border-color:var(--accent-2);}
-  .switch input:checked + .track .thumb{transform:translateX(20px);background:var(--accent-2);}
+  .switch input:checked ~ .track{background:rgba(95,211,196,.15);border-color:var(--accent-2);}
+  .switch input:checked ~ .track .thumb{transform:translateX(20px);background:var(--accent-2);}
 
   .proto-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;}
   .proto-card{
@@ -87,27 +89,6 @@
   .proto-card-header{display:flex;align-items:center;justify-content:space-between;}
   .proto-name{font-size:13px;font-weight:600;}
   .proto-var{font-family:var(--mono);font-size:11px;color:var(--text-muted);}
-  .proto-port-display{
-    font-family:var(--mono);font-size:18px;font-weight:600;
-    color:var(--accent-2);letter-spacing:.04em;min-height:28px;
-    display:flex;align-items:center;
-  }
-  .proto-port-display.empty{color:var(--text-muted);font-size:13px;font-weight:400;}
-  .proto-actions{display:flex;gap:6px;}
-  .btn-proto{
-    flex:1;font-family:var(--sans);font-size:12px;padding:7px 0;border-radius:6px;
-    border:1px solid var(--border);background:var(--bg-panel);color:var(--text-muted);
-    cursor:pointer;transition:all .15s;text-align:center;
-  }
-  .btn-proto-rand{color:var(--accent-2);}
-  .btn-proto-rand:hover{border-color:var(--accent-2);color:var(--accent-2);background:rgba(95,211,196,.06);}
-  .btn-proto-clear{color:var(--danger);}
-  .btn-proto-clear:hover{border-color:var(--danger);background:rgba(232,131,111,.06);}
-  .btn-proto-clear:disabled{opacity:.3;cursor:default;pointer-events:none;}
-
-  .proto-card.text-card .proto-port-display{display:none;}
-  .proto-card.text-card input{width:100%;font-size:13px;}
-  .proto-card.text-card .proto-actions{display:none;}
 
   .terminal{background:#0a0e10;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
   .terminal-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-panel);border-bottom:1px solid var(--border);}
@@ -154,7 +135,7 @@
           <div class="field">
             <label for="field-uuid">UUID</label>
             <div class="field-input-row">
-              <input type="text" id="field-uuid" placeholder="自动生成">
+              <input type="text" id="field-uuid" placeholder="自动生成并持久化">
               <button type="button" class="btn-mini" id="gen-uuid">随机</button>
             </div>
             <span class="desc">UUID</span>
@@ -162,7 +143,7 @@
           <div class="field">
             <label for="field-port">主端口</label>
             <div class="field-input-row">
-              <input type="number" id="field-port" placeholder="默认 3000">
+              <input type="number" id="field-port" placeholder="自动分配">
               <button type="button" class="btn-mini" id="gen-port">生成</button>
             </div>
             <span class="desc">PORT</span>
@@ -210,10 +191,11 @@
                 <div class="name">禁用 Argo</div>
                 <div class="desc">DISABLE_ARGO=true</div>
               </div>
-              <div class="switch">
+              <!-- 修复：input 在前，track/thumb 在后，用 ~ 选择器 -->
+              <label class="switch">
                 <input type="checkbox" id="toggle-disable-argo">
                 <div class="track"><div class="thumb"></div></div>
-              </div>
+              </label>
             </div>
           </div>
         </div>
@@ -308,7 +290,7 @@
 </div>
 <script>
 (function(){
-  const SCRIPT_URL = 'bash <(curl -sL https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh)';
+  const SCRIPT_URL = 'https://raw.githubusercontent.com/zaofengyue/node-sb/main/install.sh';
 
   const state = {
     uuid:'', port:'', name:'', sub:'',
@@ -323,64 +305,64 @@
     return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // 值含空格或特殊字符时加引号
-  function quoteVal(v){
-    return /[\s"'\\]/.test(v) ? `"${v.replace(/"/g,'\\"')}"` : v;
-  }
-  function quoteValHtml(v){
-    return /[\s"'\\]/.test(v) ? `"${escapeHtml(v.replace(/"/g,'\\"'))}"` : escapeHtml(v);
-  }
-
   function buildPairs(){
     const p=[];
-    if(state.uuid)          p.push(['UUID',          state.uuid]);
-    if(state.port)          p.push(['PORT',          state.port]);
-    if(state.name)          p.push(['NAME',          state.name]);
-    if(state.sub)           p.push(['SUB',           state.sub]);
-    if(state.argoPort)      p.push(['ARGO_PORT',     state.argoPort]);
-    if(state.argoDomain)    p.push(['ARGO_DOMAIN',   state.argoDomain]);
-    if(state.argoAuth)      p.push(['ARGO_AUTH',     state.argoAuth]);
-    if(state.disableArgo)   p.push(['DISABLE_ARGO',  'true']);
-    if(state.hy2)           p.push(['HY2_PORT',      state.hy2]);
-    if(state.tuic)          p.push(['TUIC_PORT',     state.tuic]);
-    if(state.reality)       p.push(['REALITY_PORT',  state.reality]);
-    if(state.realityDomain) p.push(['REALITY_DOMAIN',state.realityDomain]);
-    if(state.ss)            p.push(['SS_PORT',       state.ss]);
+    if(state.uuid)          p.push(['UUID',           state.uuid,         false]);
+    if(state.port)          p.push(['PORT',           state.port,         false]);
+    if(state.name)          p.push(['NAME',           state.name,         false]);
+    if(state.sub)           p.push(['SUB',            state.sub,          false]);
+    if(state.argoPort)      p.push(['ARGO_PORT',      state.argoPort,     false]);
+    if(state.argoDomain)    p.push(['ARGO_DOMAIN',    state.argoDomain,   false]);
+    if(state.argoAuth)      p.push(['ARGO_AUTH',      state.argoAuth,     true]);  // 强制引号
+    if(state.disableArgo)   p.push(['DISABLE_ARGO',   'true',             false]);
+    if(state.hy2)           p.push(['HY2_PORT',       state.hy2,          false]);
+    if(state.tuic)          p.push(['TUIC_PORT',      state.tuic,         false]);
+    if(state.reality)       p.push(['REALITY_PORT',   state.reality,      false]);
+    if(state.realityDomain) p.push(['REALITY_DOMAIN', state.realityDomain,false]);
+    if(state.ss)            p.push(['SS_PORT',        state.ss,           false]);
     return p;
   }
 
-  function fetcherText(){
-    const lt = '&lt;';
-    return state.cmdType === 'curl'
-      ? `bash ${lt}(curl -sL ${escapeHtml(SCRIPT_URL)})`
-      : `bash ${lt}(wget -qO- ${escapeHtml(SCRIPT_URL)})`;
+  function formatVal(v, forceQuote){
+    // 强制引号 或 含空格/特殊字符时加引号
+    if(forceQuote || /[\s"'\\`$|&;()<>]/.test(v)) return `"${v}"`;
+    return v;
   }
+  function formatValHtml(v, forceQuote){
+    if(forceQuote || /[\s"'\\`$|&;()<>]/.test(v)) return `"${escapeHtml(v)}"`;
+    return escapeHtml(v);
+  }
+
   function fetcherPlain(){
     return state.cmdType === 'curl'
       ? `bash <(curl -sL ${SCRIPT_URL})`
       : `bash <(wget -qO- ${SCRIPT_URL})`;
   }
+  function fetcherHtml(){
+    const lt = '&lt;';
+    return state.cmdType === 'curl'
+      ? `bash ${lt}(curl -sL ${escapeHtml(SCRIPT_URL)})`
+      : `bash ${lt}(wget -qO- ${escapeHtml(SCRIPT_URL)})`;
+  }
 
   function plainCommand(){
     const pairs = buildPairs();
-    const v = pairs.map(([k,v]) => `${k}=${quoteVal(v)}`).join(' ');
+    const v = pairs.map(([k,v,q]) => `${k}=${formatVal(v,q)}`).join(' ');
     return (v ? v + ' ' : '') + fetcherPlain();
   }
 
   function render(){
     const pairs = buildPairs();
-    const html = pairs.map(([k,v]) =>
-      `<span class="var">${escapeHtml(k)}</span>=${quoteValHtml(v)}`
+    const html = pairs.map(([k,v,q]) =>
+      `<span class="var">${escapeHtml(k)}</span>=${formatValHtml(v,q)}`
     ).join(' ');
     document.getElementById('command-output').innerHTML =
-      (html ? html + ' ' : '') + fetcherText();
+      (html ? html + ' ' : '') + fetcherHtml();
   }
 
   const protoKeys = ['hy2','tuic','reality','ss'];
   function updateProtoCard(key){
-    const card = document.getElementById('card-' + key);
-    if(state[key]) card.classList.add('active');
-    else card.classList.remove('active');
+    document.getElementById('card-'+key).classList.toggle('active', !!state[key]);
   }
 
   document.querySelectorAll('.btn-proto-rand').forEach(btn => {
@@ -388,50 +370,41 @@
       const key = btn.dataset.key;
       const p = randPort();
       state[key] = p;
-      document.getElementById('input-' + key).value = p;
-      updateProtoCard(key);
-      render();
+      document.getElementById('input-'+key).value = p;
+      updateProtoCard(key); render();
     });
   });
 
   protoKeys.forEach(key => {
-    document.getElementById('input-' + key).addEventListener('input', e => {
+    document.getElementById('input-'+key).addEventListener('input', e => {
       state[key] = e.target.value.trim();
-      updateProtoCard(key);
-      render();
+      updateProtoCard(key); render();
     });
   });
 
   document.getElementById('gen-port').addEventListener('click', () => {
-    const p = randPort();
-    document.getElementById('field-port').value = p;
-    state.port = p; render();
+    const p = randPort(); document.getElementById('field-port').value = p; state.port = p; render();
   });
-
   document.getElementById('gen-argo-port').addEventListener('click', () => {
-    const p = randPort();
-    document.getElementById('field-argo-port').value = p;
-    state.argoPort = p; render();
+    const p = randPort(); document.getElementById('field-argo-port').value = p; state.argoPort = p; render();
   });
-
   document.getElementById('gen-uuid').addEventListener('click', () => {
-    const b = new Uint8Array(16);
-    crypto.getRandomValues(b);
-    b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
-    const h = Array.from(b, x => x.toString(16).padStart(2, '0'));
+    const b = new Uint8Array(16); crypto.getRandomValues(b);
+    b[6]=(b[6]&0x0f)|0x40; b[8]=(b[8]&0x3f)|0x80;
+    const h = Array.from(b, x => x.toString(16).padStart(2,'0'));
     const uuid = `${h.slice(0,4).join('')}-${h.slice(4,6).join('')}-${h.slice(6,8).join('')}-${h.slice(8,10).join('')}-${h.slice(10).join('')}`;
-    document.getElementById('field-uuid').value = uuid;
-    state.uuid = uuid; render();
+    document.getElementById('field-uuid').value = uuid; state.uuid = uuid; render();
   });
 
   [
     ['field-uuid','uuid'],['field-port','port'],['field-name','name'],['field-sub','sub'],
     ['field-argo-port','argoPort'],['field-argo-domain','argoDomain'],['field-argo-auth','argoAuth'],
     ['field-reality-domain','realityDomain'],
-  ].forEach(([id, key]) => {
+  ].forEach(([id,key]) => {
     document.getElementById(id).addEventListener('input', e => { state[key] = e.target.value.trim(); render(); });
   });
 
+  // 开关：监听 change 事件
   document.getElementById('toggle-disable-argo').addEventListener('change', e => {
     state.disableArgo = e.target.checked; render();
   });
@@ -439,7 +412,7 @@
   document.querySelectorAll('.seg-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       state.cmdType = btn.dataset.type;
-      document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b===btn));
       render();
     });
   });
@@ -458,12 +431,12 @@
   });
 
   document.getElementById('reset-btn').addEventListener('click', () => {
-    Object.keys(state).forEach(k => { state[k] = k === 'cmdType' ? 'curl' : k === 'disableArgo' ? false : ''; });
+    Object.keys(state).forEach(k => { state[k] = k==='cmdType'?'curl': k==='disableArgo'?false:''; });
     ['field-uuid','field-port','field-name','field-sub','field-argo-port','field-argo-domain','field-argo-auth','field-reality-domain']
       .forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('toggle-disable-argo').checked = false;
-    protoKeys.forEach(k => { document.getElementById('input-' + k).value = ''; updateProtoCard(k); });
-    document.querySelectorAll('.seg-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+    protoKeys.forEach(k => { document.getElementById('input-'+k).value = ''; updateProtoCard(k); });
+    document.querySelectorAll('.seg-btn').forEach((b,i) => b.classList.toggle('active', i===0));
     render();
   });
 
