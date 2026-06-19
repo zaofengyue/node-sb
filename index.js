@@ -37,9 +37,9 @@ const WS_PATH_VLESS  = '/fengyue-vl';
 const WS_PATH_TROJAN = '/fengyue-tr';
 
 // Argo 三协议固定内部端口
-const V_VMESS_PORT  = 10080;
-const V_VLESS_PORT  = 10081;
-const V_TROJAN_PORT = 10082;
+const V_VMESS_PORT  = 10000;
+const V_VLESS_PORT  = 10001;
+const V_TROJAN_PORT = 10002;
 
 const CF_PREFER_HOST = 'cdns.doon.eu.org';
 
