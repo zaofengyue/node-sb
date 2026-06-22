@@ -6,7 +6,7 @@ RED='\033[0;31m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
-echo -e "${YELLOW}========== node-sb 开发版安装（源码未混淆）==========${NC}"
+echo -e "${YELLOW}========== node-sb 面板安装 ==========${NC}"
 
 if command -v curl >/dev/null 2>&1; then
   DL="curl -sL"; DL_O="-o"
