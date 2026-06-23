@@ -14,8 +14,8 @@ const PRESET_TUIC_PORT      = '';
 const PRESET_REALITY_PORT   = '';
 const PRESET_REALITY_DOMAIN = '';
 const PRESET_SS_PORT        = '';
-const PRESET_S5_PORT        = '';     // 新增：Socks5 端口
-const PRESET_ANYTLS_PORT    = '';     // 新增：AnyTLS 端口
+const PRESET_S5_PORT        = '';
+const PRESET_ANYTLS_PORT    = '';
 // =============================================
 
 const { execSync, spawn } = require('child_process');
