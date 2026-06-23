@@ -794,9 +794,10 @@ async function main() {
 
   // ───── 新增：Socks5 订阅链接 ─────
   if (s5Active && PUBLIC_IP) {
-    const s5UserInfo = Buffer.from(`${UUID.substring(0, 8)}:${UUID.slice(-12)}`).toString('base64');
+    const s5User = encodeURIComponent(UUID.substring(0, 8));
+    const s5Pass = encodeURIComponent(UUID.slice(-12));
     links.push(
-      `socks://${s5UserInfo}@${PUBLIC_IP}:${S5_PORT}` +
+      `socks5://${s5User}:${s5Pass}@${PUBLIC_IP}:${S5_PORT}` +
       `#${encodeURIComponent(NAME)}`
     );
   }
@@ -805,7 +806,7 @@ async function main() {
   if (anytlsActive && PUBLIC_IP) {
     links.push(
       `anytls://${UUID}@${PUBLIC_IP}:${ANYTLS_PORT}` +
-      `?security=tls&sni=${PUBLIC_IP}&fp=chrome&insecure=1&allowInsecure=1` +
+      `?security=tls&sni=bing.com&fp=chrome&allowInsecure=1` +
       `#${encodeURIComponent(NAME)}`
     );
   }
