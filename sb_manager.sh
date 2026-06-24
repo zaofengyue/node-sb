@@ -106,16 +106,17 @@ menu_sub() {
   echo -e "${GRAY}已启用协议:${RESET}"
   echo "$decoded" | while IFS= read -r line; do
     case "$line" in
-      vmess://*)    echo -e "${GREEN}✓ VMess${RESET}" ;;
-      vless://*Argo*|vless://*ws*) ;;
-      trojan://*)   echo -e "${GREEN}✓ Trojan${RESET}" ;;
-      hysteria2://*)echo -e "${GREEN}✓ Hysteria2${RESET}" ;;
-      tuic://*)     echo -e "${GREEN}✓ TUIC v5${RESET}" ;;
-      ss://*)       echo -e "${GREEN}✓ Shadowsocks${RESET}" ;;
+      vmess://*)     echo -e "${GREEN}✓ VMess${RESET}" ;;
+      trojan://*)    echo -e "${GREEN}✓ Trojan${RESET}" ;;
+      hysteria2://*) echo -e "${GREEN}✓ Hysteria2${RESET}" ;;
+      tuic://*)      echo -e "${GREEN}✓ TUIC v5${RESET}" ;;
+      ss://*)        echo -e "${GREEN}✓ Shadowsocks${RESET}" ;;
+      socks5://*)    echo -e "${GREEN}✓ Socks5${RESET}" ;;
+      anytls://*)    echo -e "${GREEN}✓ AnyTLS${RESET}" ;;
+      vless://*)     echo -e "${GREEN}✓ VLESS${RESET}" ;;
     esac
   done
 
-  # 更友好：按协议逐行显示完整链接
   echo -e "${GRAY}--------------------------------${RESET}"
   echo -e "${GRAY}节点链接:${RESET}"
   echo "$decoded" | while IFS= read -r line; do
@@ -284,12 +285,14 @@ config_proto() {
   while true; do
     clear
     echo -e "${GREEN}======= 可选协议端口 =======${RESET}"
-    local hy2 tuic reality reality_domain ss
+    local hy2 tuic reality reality_domain ss s5 anytls
     hy2=$(get_val HY2_PORT)
     tuic=$(get_val TUIC_PORT)
     reality=$(get_val REALITY_PORT)
     reality_domain=$(get_val REALITY_DOMAIN)
     ss=$(get_val SS_PORT)
+    s5=$(get_val S5_PORT)
+    anytls=$(get_val ANYTLS_PORT)
 
     echo -e "${GRAY}--------------------------------${RESET}"
     echo -e "${WHITE}1. Hysteria2    (UDP) [${CYAN}${hy2:-未启用}${WHITE}]${RESET}"
@@ -297,6 +300,8 @@ config_proto() {
     echo -e "${WHITE}3. VLESS Reality(TCP) [${CYAN}${reality:-未启用}${WHITE}]${RESET}"
     echo -e "${WHITE}4. Reality Domain     [${CYAN}${reality_domain:-www.iij.ad.jp}${WHITE}]${RESET}"
     echo -e "${WHITE}5. Shadowsocks  (TCP) [${CYAN}${ss:-未启用}${WHITE}]${RESET}"
+    echo -e "${WHITE}6. Socks5       (TCP) [${CYAN}${s5:-未启用}${WHITE}]${RESET}"
+    echo -e "${WHITE}7. AnyTLS       (TCP) [${CYAN}${anytls:-未启用}${WHITE}]${RESET}"
     echo -e "${GRAY}--------------------------------${RESET}"
     echo -e "${WHITE}0. 确认修改并重启${RESET}"
     echo -e "${GRAY}--------------------------------${RESET}"
@@ -307,39 +312,30 @@ config_proto() {
       1)
         echo -ne "${GRAY}HY2_PORT（留空禁用）[当前: ${CYAN}${hy2:-未启用}${GRAY}]: ${RESET}"
         read -r val
-        if [ "$val" = " " ] || [ -z "$val" ] && [ -n "$hy2" ]; then
-          set_val HY2_PORT ""
-          echo -e "${YELLOW}Hysteria2 已禁用${RESET}"
+        if [ -z "$val" ] && [ -n "$hy2" ]; then
+          set_val HY2_PORT ""; echo -e "${YELLOW}Hysteria2 已禁用${RESET}"
         elif [ -n "$val" ]; then
-          set_val HY2_PORT "$val"
-          echo -e "${GREEN}已更新为: $val${RESET}"
+          set_val HY2_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
       2)
         echo -ne "${GRAY}TUIC_PORT（留空禁用）[当前: ${CYAN}${tuic:-未启用}${GRAY}]: ${RESET}"
         read -r val
-        if [ "$val" = " " ] || [ -z "$val" ] && [ -n "$tuic" ]; then
-          set_val TUIC_PORT ""
-          echo -e "${YELLOW}TUIC 已禁用${RESET}"
+        if [ -z "$val" ] && [ -n "$tuic" ]; then
+          set_val TUIC_PORT ""; echo -e "${YELLOW}TUIC 已禁用${RESET}"
         elif [ -n "$val" ]; then
-          set_val TUIC_PORT "$val"
-          echo -e "${GREEN}已更新为: $val${RESET}"
+          set_val TUIC_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
       3)
         echo -ne "${GRAY}REALITY_PORT（留空禁用）[当前: ${CYAN}${reality:-未启用}${GRAY}]: ${RESET}"
         read -r val
-        if [ "$val" = " " ] || [ -z "$val" ] && [ -n "$reality" ]; then
-          set_val REALITY_PORT ""
-          echo -e "${YELLOW}VLESS Reality 已禁用${RESET}"
+        if [ -z "$val" ] && [ -n "$reality" ]; then
+          set_val REALITY_PORT ""; echo -e "${YELLOW}VLESS Reality 已禁用${RESET}"
         elif [ -n "$val" ]; then
-          set_val REALITY_PORT "$val"
-          echo -e "${GREEN}已更新为: $val${RESET}"
+          set_val REALITY_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
       4)
         echo -ne "${GRAY}REALITY_DOMAIN [当前: ${CYAN}${reality_domain:-www.iij.ad.jp}${GRAY}]: ${RESET}"
         read -r val
@@ -349,28 +345,41 @@ config_proto() {
           echo -e "${GREEN}已更新为: $val${RESET}"
           echo -e "${YELLOW}已清除 Reality 密钥，重启后重新生成${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
       5)
         echo -ne "${GRAY}SS_PORT（留空禁用）[当前: ${CYAN}${ss:-未启用}${GRAY}]: ${RESET}"
         read -r val
-        if [ "$val" = " " ] || [ -z "$val" ] && [ -n "$ss" ]; then
-          set_val SS_PORT ""
-          echo -e "${YELLOW}Shadowsocks 已禁用${RESET}"
+        if [ -z "$val" ] && [ -n "$ss" ]; then
+          set_val SS_PORT ""; echo -e "${YELLOW}Shadowsocks 已禁用${RESET}"
         elif [ -n "$val" ]; then
-          set_val SS_PORT "$val"
-          echo -e "${GREEN}已更新为: $val${RESET}"
+          set_val SS_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
+      6)
+        echo -ne "${GRAY}S5_PORT（留空禁用）[当前: ${CYAN}${s5:-未启用}${GRAY}]: ${RESET}"
+        read -r val
+        if [ -z "$val" ] && [ -n "$s5" ]; then
+          set_val S5_PORT ""; echo -e "${YELLOW}Socks5 已禁用${RESET}"
+        elif [ -n "$val" ]; then
+          set_val S5_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
+        fi
+        sleep 1 ;;
+      7)
+        echo -ne "${GRAY}ANYTLS_PORT（留空禁用）[当前: ${CYAN}${anytls:-未启用}${GRAY}]: ${RESET}"
+        read -r val
+        if [ -z "$val" ] && [ -n "$anytls" ]; then
+          set_val ANYTLS_PORT ""; echo -e "${YELLOW}AnyTLS 已禁用${RESET}"
+        elif [ -n "$val" ]; then
+          set_val ANYTLS_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
+        fi
+        sleep 1 ;;
       0)
         echo -ne "${GRAY}确认修改并重启? [y/N]: ${RESET}"
         read -r confirm
         if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
           restart_service
         fi
-        return
-        ;;
+        return ;;
       *) ;;
     esac
   done

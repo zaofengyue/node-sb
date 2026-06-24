@@ -19,7 +19,6 @@ fi
 if ! command -v node >/dev/null 2>&1; then
   echo -e "${YELLOW}未检测到 Node.js，尝试自动安装...${NC}"
 
-  # 优先尝试 nvm（无需 root）
   if [ ! -f "$HOME/.nvm/nvm.sh" ]; then
     echo -e "${YELLOW}正在安装 nvm...${NC}"
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash >/dev/null 2>&1
@@ -32,14 +31,12 @@ if ! command -v node >/dev/null 2>&1; then
     nvm use 20 >/dev/null 2>&1
     echo -e "${GREEN}Node.js $(node -v) 已通过 nvm 安装${NC}"
 
-  # 其次尝试 apt（需要 root）
   elif command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
     echo -e "${YELLOW}正在通过 apt 安装 Node.js 20...${NC}"
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
     apt-get install -y nodejs >/dev/null 2>&1
     echo -e "${GREEN}Node.js $(node -v) 已通过 apt 安装${NC}"
 
-  # 其次尝试 yum（需要 root）
   elif command -v yum >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
     echo -e "${YELLOW}正在通过 yum 安装 Node.js 20...${NC}"
     curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
@@ -52,7 +49,6 @@ if ! command -v node >/dev/null 2>&1; then
     exit 1
   fi
 
-  # 安装后再次检测
   if ! command -v node >/dev/null 2>&1; then
     echo -e "${RED}Node.js 安装失败，请手动安装后重试${NC}"
     exit 1
@@ -82,12 +78,15 @@ INPUT_TUIC_PORT="${TUIC_PORT:-}"
 INPUT_REALITY_PORT="${REALITY_PORT:-}"
 INPUT_REALITY_DOMAIN="${REALITY_DOMAIN:-}"
 INPUT_SS_PORT="${SS_PORT:-}"
+INPUT_S5_PORT="${S5_PORT:-}"
+INPUT_ANYTLS_PORT="${ANYTLS_PORT:-}"
 INPUT_DISABLE_ARGO="${DISABLE_ARGO:-}"
 
 HAS_ENV=false
 for v in "$INPUT_UUID" "$INPUT_PORT" "$INPUT_ARGO_PORT" "$INPUT_NAME" "$INPUT_SUB" \
           "$INPUT_ARGO_DOMAIN" "$INPUT_ARGO_AUTH" "$INPUT_HY2_PORT" "$INPUT_TUIC_PORT" \
-          "$INPUT_REALITY_PORT" "$INPUT_REALITY_DOMAIN" "$INPUT_SS_PORT" "$INPUT_DISABLE_ARGO"; do
+          "$INPUT_REALITY_PORT" "$INPUT_REALITY_DOMAIN" "$INPUT_SS_PORT" \
+          "$INPUT_S5_PORT" "$INPUT_ANYTLS_PORT" "$INPUT_DISABLE_ARGO"; do
   [ -n "$v" ] && HAS_ENV=true && break
 done
 
@@ -95,22 +94,58 @@ if ! $HAS_ENV; then
   echo ""
   echo -e "${YELLOW}========== 基础配置（留空使用默认值）==========${NC}"
   read -p "UUID（留空自动生成）: "              INPUT_UUID
-  read -p "PORT（留空自动分配）: "              INPUT_PORT
-  read -p "ARGO_PORT（留空默认 8001）: "        INPUT_ARGO_PORT
+  INPUT_UUID="$(echo "$INPUT_UUID" | tr -d '[:space:]')"
   read -p "NAME/节点名称前缀（留空自动识别）: " INPUT_NAME
-  read -p "SUB/订阅路径（留空默认 sub）: "      INPUT_SUB
+  INPUT_NAME="$(echo "$INPUT_NAME" | tr -d '[:space:]')"
+
   echo ""
-  echo -e "${YELLOW}--- Argo 隧道（留空使用临时隧道）---${NC}"
-  read -p "ARGO_DOMAIN/固定隧道域名: "  INPUT_ARGO_DOMAIN
-  read -p "ARGO_AUTH/固定隧道 Token: "  INPUT_ARGO_AUTH
+  echo -e "${YELLOW}--- Argo 隧道 ---${NC}"
+  read -p "是否启用 Argo 隧道？[Y/n]: " _ARGO_CHOICE
+  _ARGO_CHOICE="$(echo "$_ARGO_CHOICE" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  if [ "$_ARGO_CHOICE" = "n" ]; then
+    INPUT_DISABLE_ARGO="true"
+    echo -e "${YELLOW}Argo 已禁用${NC}"
+  else
+    INPUT_DISABLE_ARGO=""
+    echo -e "${GREEN}Argo 已启用（临时隧道），如需固定隧道可通过管理面板 sb 配置${NC}"
+  fi
+
   echo ""
-  echo -e "${YELLOW}--- 可选协议（留空不启用）---${NC}"
-  read -p "HY2_PORT/Hysteria2 端口(UDP): "        INPUT_HY2_PORT
-  read -p "TUIC_PORT/TUIC v5 端口(UDP): "         INPUT_TUIC_PORT
-  read -p "REALITY_PORT/VLESS Reality 端口(TCP): " INPUT_REALITY_PORT
-  read -p "REALITY_DOMAIN/Reality 伪装域名（留空默认 www.iij.ad.jp）: " INPUT_REALITY_DOMAIN
-  read -p "SS_PORT/Shadowsocks 2022 端口(TCP): "  INPUT_SS_PORT
-  read -p "DISABLE_ARGO/禁用 Argo 隧道（填 true 禁用，留空启用）: " INPUT_DISABLE_ARGO
+  echo -e "${YELLOW}--- 可选协议（留空跳过）---${NC}"
+  echo -e "  ${GREEN}a${NC}. Hysteria2     (UDP)"
+  echo -e "  ${GREEN}b${NC}. TUIC v5       (UDP)"
+  echo -e "  ${GREEN}c${NC}. VLESS Reality (TCP)"
+  echo -e "  ${GREEN}d${NC}. Shadowsocks   (TCP)"
+  echo -e "  ${GREEN}e${NC}. Socks5        (TCP)"
+  echo -e "  ${GREEN}f${NC}. AnyTLS        (TCP)"
+  read -p "选择协议（如 ac 表示启用 a 和 c，留空跳过）: " _PROTO_CHOICE
+
+  if echo "$_PROTO_CHOICE" | grep -qi "a"; then
+    read -p "HY2_PORT/Hysteria2 端口(UDP): " INPUT_HY2_PORT
+    INPUT_HY2_PORT="$(echo "$INPUT_HY2_PORT" | tr -d '[:space:]')"
+  fi
+  if echo "$_PROTO_CHOICE" | grep -qi "b"; then
+    read -p "TUIC_PORT/TUIC v5 端口(UDP): " INPUT_TUIC_PORT
+    INPUT_TUIC_PORT="$(echo "$INPUT_TUIC_PORT" | tr -d '[:space:]')"
+  fi
+  if echo "$_PROTO_CHOICE" | grep -qi "c"; then
+    read -p "REALITY_PORT/VLESS Reality 端口(TCP): " INPUT_REALITY_PORT
+    INPUT_REALITY_PORT="$(echo "$INPUT_REALITY_PORT" | tr -d '[:space:]')"
+    read -p "REALITY_DOMAIN/Reality 伪装域名（留空默认 www.iij.ad.jp）: " INPUT_REALITY_DOMAIN
+    INPUT_REALITY_DOMAIN="$(echo "$INPUT_REALITY_DOMAIN" | tr -d '[:space:]')"
+  fi
+  if echo "$_PROTO_CHOICE" | grep -qi "d"; then
+    read -p "SS_PORT/Shadowsocks 端口(TCP): " INPUT_SS_PORT
+    INPUT_SS_PORT="$(echo "$INPUT_SS_PORT" | tr -d '[:space:]')"
+  fi
+  if echo "$_PROTO_CHOICE" | grep -qi "e"; then
+    read -p "S5_PORT/Socks5 端口(TCP): " INPUT_S5_PORT
+    INPUT_S5_PORT="$(echo "$INPUT_S5_PORT" | tr -d '[:space:]')"
+  fi
+  if echo "$_PROTO_CHOICE" | grep -qi "f"; then
+    read -p "ANYTLS_PORT/AnyTLS 端口(TCP): " INPUT_ANYTLS_PORT
+    INPUT_ANYTLS_PORT="$(echo "$INPUT_ANYTLS_PORT" | tr -d '[:space:]')"
+  fi
 fi
 
 export UUID="$INPUT_UUID"
@@ -125,6 +160,8 @@ export TUIC_PORT="$INPUT_TUIC_PORT"
 export REALITY_PORT="$INPUT_REALITY_PORT"
 export REALITY_DOMAIN="$INPUT_REALITY_DOMAIN"
 export SS_PORT="$INPUT_SS_PORT"
+export S5_PORT="$INPUT_S5_PORT"
+export ANYTLS_PORT="$INPUT_ANYTLS_PORT"
 export DISABLE_ARGO="$INPUT_DISABLE_ARGO"
 
 # ── 快捷命令 ────────────────────────────────────────────────────────────────
@@ -240,16 +277,17 @@ menu_sub() {
   echo -e "${GRAY}已启用协议:${RESET}"
   echo "$decoded" | while IFS= read -r line; do
     case "$line" in
-      vmess://*)    echo -e "${GREEN}✓ VMess${RESET}" ;;
-      vless://*Argo*|vless://*ws*) ;;
-      trojan://*)   echo -e "${GREEN}✓ Trojan${RESET}" ;;
-      hysteria2://*)echo -e "${GREEN}✓ Hysteria2${RESET}" ;;
-      tuic://*)     echo -e "${GREEN}✓ TUIC v5${RESET}" ;;
-      ss://*)       echo -e "${GREEN}✓ Shadowsocks${RESET}" ;;
+      vmess://*)     echo -e "${GREEN}✓ VMess${RESET}" ;;
+      trojan://*)    echo -e "${GREEN}✓ Trojan${RESET}" ;;
+      hysteria2://*) echo -e "${GREEN}✓ Hysteria2${RESET}" ;;
+      tuic://*)      echo -e "${GREEN}✓ TUIC v5${RESET}" ;;
+      ss://*)        echo -e "${GREEN}✓ Shadowsocks${RESET}" ;;
+      socks5://*)    echo -e "${GREEN}✓ Socks5${RESET}" ;;
+      anytls://*)    echo -e "${GREEN}✓ AnyTLS${RESET}" ;;
+      vless://*)     echo -e "${GREEN}✓ VLESS${RESET}" ;;
     esac
   done
 
-  # 更友好：按协议逐行显示完整链接
   echo -e "${GRAY}--------------------------------${RESET}"
   echo -e "${GRAY}节点链接:${RESET}"
   echo "$decoded" | while IFS= read -r line; do
@@ -418,12 +456,14 @@ config_proto() {
   while true; do
     clear
     echo -e "${GREEN}======= 可选协议端口 =======${RESET}"
-    local hy2 tuic reality reality_domain ss
+    local hy2 tuic reality reality_domain ss s5 anytls
     hy2=$(get_val HY2_PORT)
     tuic=$(get_val TUIC_PORT)
     reality=$(get_val REALITY_PORT)
     reality_domain=$(get_val REALITY_DOMAIN)
     ss=$(get_val SS_PORT)
+    s5=$(get_val S5_PORT)
+    anytls=$(get_val ANYTLS_PORT)
 
     echo -e "${GRAY}--------------------------------${RESET}"
     echo -e "${WHITE}1. Hysteria2    (UDP) [${CYAN}${hy2:-未启用}${WHITE}]${RESET}"
@@ -431,6 +471,8 @@ config_proto() {
     echo -e "${WHITE}3. VLESS Reality(TCP) [${CYAN}${reality:-未启用}${WHITE}]${RESET}"
     echo -e "${WHITE}4. Reality Domain     [${CYAN}${reality_domain:-www.iij.ad.jp}${WHITE}]${RESET}"
     echo -e "${WHITE}5. Shadowsocks  (TCP) [${CYAN}${ss:-未启用}${WHITE}]${RESET}"
+    echo -e "${WHITE}6. Socks5       (TCP) [${CYAN}${s5:-未启用}${WHITE}]${RESET}"
+    echo -e "${WHITE}7. AnyTLS       (TCP) [${CYAN}${anytls:-未启用}${WHITE}]${RESET}"
     echo -e "${GRAY}--------------------------------${RESET}"
     echo -e "${WHITE}0. 确认修改并重启${RESET}"
     echo -e "${GRAY}--------------------------------${RESET}"
@@ -441,39 +483,30 @@ config_proto() {
       1)
         echo -ne "${GRAY}HY2_PORT（留空禁用）[当前: ${CYAN}${hy2:-未启用}${GRAY}]: ${RESET}"
         read -r val
-        if [ "$val" = " " ] || [ -z "$val" ] && [ -n "$hy2" ]; then
-          set_val HY2_PORT ""
-          echo -e "${YELLOW}Hysteria2 已禁用${RESET}"
+        if [ -z "$val" ] && [ -n "$hy2" ]; then
+          set_val HY2_PORT ""; echo -e "${YELLOW}Hysteria2 已禁用${RESET}"
         elif [ -n "$val" ]; then
-          set_val HY2_PORT "$val"
-          echo -e "${GREEN}已更新为: $val${RESET}"
+          set_val HY2_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
       2)
         echo -ne "${GRAY}TUIC_PORT（留空禁用）[当前: ${CYAN}${tuic:-未启用}${GRAY}]: ${RESET}"
         read -r val
-        if [ "$val" = " " ] || [ -z "$val" ] && [ -n "$tuic" ]; then
-          set_val TUIC_PORT ""
-          echo -e "${YELLOW}TUIC 已禁用${RESET}"
+        if [ -z "$val" ] && [ -n "$tuic" ]; then
+          set_val TUIC_PORT ""; echo -e "${YELLOW}TUIC 已禁用${RESET}"
         elif [ -n "$val" ]; then
-          set_val TUIC_PORT "$val"
-          echo -e "${GREEN}已更新为: $val${RESET}"
+          set_val TUIC_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
       3)
         echo -ne "${GRAY}REALITY_PORT（留空禁用）[当前: ${CYAN}${reality:-未启用}${GRAY}]: ${RESET}"
         read -r val
-        if [ "$val" = " " ] || [ -z "$val" ] && [ -n "$reality" ]; then
-          set_val REALITY_PORT ""
-          echo -e "${YELLOW}VLESS Reality 已禁用${RESET}"
+        if [ -z "$val" ] && [ -n "$reality" ]; then
+          set_val REALITY_PORT ""; echo -e "${YELLOW}VLESS Reality 已禁用${RESET}"
         elif [ -n "$val" ]; then
-          set_val REALITY_PORT "$val"
-          echo -e "${GREEN}已更新为: $val${RESET}"
+          set_val REALITY_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
       4)
         echo -ne "${GRAY}REALITY_DOMAIN [当前: ${CYAN}${reality_domain:-www.iij.ad.jp}${GRAY}]: ${RESET}"
         read -r val
@@ -483,28 +516,41 @@ config_proto() {
           echo -e "${GREEN}已更新为: $val${RESET}"
           echo -e "${YELLOW}已清除 Reality 密钥，重启后重新生成${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
       5)
         echo -ne "${GRAY}SS_PORT（留空禁用）[当前: ${CYAN}${ss:-未启用}${GRAY}]: ${RESET}"
         read -r val
-        if [ "$val" = " " ] || [ -z "$val" ] && [ -n "$ss" ]; then
-          set_val SS_PORT ""
-          echo -e "${YELLOW}Shadowsocks 已禁用${RESET}"
+        if [ -z "$val" ] && [ -n "$ss" ]; then
+          set_val SS_PORT ""; echo -e "${YELLOW}Shadowsocks 已禁用${RESET}"
         elif [ -n "$val" ]; then
-          set_val SS_PORT "$val"
-          echo -e "${GREEN}已更新为: $val${RESET}"
+          set_val SS_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
         fi
-        sleep 1
-        ;;
+        sleep 1 ;;
+      6)
+        echo -ne "${GRAY}S5_PORT（留空禁用）[当前: ${CYAN}${s5:-未启用}${GRAY}]: ${RESET}"
+        read -r val
+        if [ -z "$val" ] && [ -n "$s5" ]; then
+          set_val S5_PORT ""; echo -e "${YELLOW}Socks5 已禁用${RESET}"
+        elif [ -n "$val" ]; then
+          set_val S5_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
+        fi
+        sleep 1 ;;
+      7)
+        echo -ne "${GRAY}ANYTLS_PORT（留空禁用）[当前: ${CYAN}${anytls:-未启用}${GRAY}]: ${RESET}"
+        read -r val
+        if [ -z "$val" ] && [ -n "$anytls" ]; then
+          set_val ANYTLS_PORT ""; echo -e "${YELLOW}AnyTLS 已禁用${RESET}"
+        elif [ -n "$val" ]; then
+          set_val ANYTLS_PORT "$val"; echo -e "${GREEN}已更新为: $val${RESET}"
+        fi
+        sleep 1 ;;
       0)
         echo -ne "${GRAY}确认修改并重启? [y/N]: ${RESET}"
         read -r confirm
         if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
           restart_service
         fi
-        return
-        ;;
+        return ;;
       *) ;;
     esac
   done
@@ -625,7 +671,6 @@ echo "删除完成"
 DELCMD
 chmod +x "$LOCAL_BIN/sb-del"
 
-
 cat > "$LOCAL_BIN/sb-edit" << 'EDITCMD'
 #!/bin/bash
 
@@ -657,6 +702,8 @@ CUR_TUIC_PORT=$(get_val TUIC_PORT)
 CUR_REALITY_PORT=$(get_val REALITY_PORT)
 CUR_REALITY_DOMAIN=$(get_val REALITY_DOMAIN)
 CUR_SS_PORT=$(get_val SS_PORT)
+CUR_S5_PORT=$(get_val S5_PORT)
+CUR_ANYTLS_PORT=$(get_val ANYTLS_PORT)
 CUR_DISABLE_ARGO=$(get_val DISABLE_ARGO)
 
 echo -e "${GREEN}========== node-sb 配置修改 ==========${NC}"
@@ -679,9 +726,10 @@ read -p "TUIC_PORT(UDP)    [${CUR_TUIC_PORT:-未启用}]: "        IN_TUIC_PORT
 read -p "REALITY_PORT(TCP) [${CUR_REALITY_PORT:-未启用}]: "     IN_REALITY_PORT
 read -p "REALITY_DOMAIN    [${CUR_REALITY_DOMAIN:-www.iij.ad.jp}]: " IN_REALITY_DOMAIN
 read -p "SS_PORT(TCP)      [${CUR_SS_PORT:-未启用}]: "          IN_SS_PORT
-read -p "DISABLE_ARGO      [${CUR_DISABLE_ARGO:-false}]: "        IN_DISABLE_ARGO
+read -p "S5_PORT(TCP)      [${CUR_S5_PORT:-未启用}]: "          IN_S5_PORT
+read -p "ANYTLS_PORT(TCP)  [${CUR_ANYTLS_PORT:-未启用}]: "      IN_ANYTLS_PORT
+read -p "DISABLE_ARGO      [${CUR_DISABLE_ARGO:-false}]: "       IN_DISABLE_ARGO
 
-# 直接回车保留当前值；输入空格再回车则清空
 NEW_UUID="${IN_UUID:-$CUR_UUID}"
 NEW_PORT="${IN_PORT:-$CUR_PORT}"
 NEW_ARGO_PORT="${IN_ARGO_PORT:-$CUR_ARGO_PORT}"
@@ -694,6 +742,8 @@ NEW_TUIC_PORT="${IN_TUIC_PORT:-$CUR_TUIC_PORT}"
 NEW_REALITY_PORT="${IN_REALITY_PORT:-$CUR_REALITY_PORT}"
 NEW_REALITY_DOMAIN="${IN_REALITY_DOMAIN:-$CUR_REALITY_DOMAIN}"
 NEW_SS_PORT="${IN_SS_PORT:-$CUR_SS_PORT}"
+NEW_S5_PORT="${IN_S5_PORT:-$CUR_S5_PORT}"
+NEW_ANYTLS_PORT="${IN_ANYTLS_PORT:-$CUR_ANYTLS_PORT}"
 NEW_DISABLE_ARGO="${IN_DISABLE_ARGO:-$CUR_DISABLE_ARGO}"
 
 NODE_BIN="$(command -v node)"
@@ -712,6 +762,8 @@ export TUIC_PORT="$NEW_TUIC_PORT"
 export REALITY_PORT="$NEW_REALITY_PORT"
 export REALITY_DOMAIN="$NEW_REALITY_DOMAIN"
 export SS_PORT="$NEW_SS_PORT"
+export S5_PORT="$NEW_S5_PORT"
+export ANYTLS_PORT="$NEW_ANYTLS_PORT"
 export DISABLE_ARGO="$NEW_DISABLE_ARGO"
 cd "$APP_DIR"
 nohup $NODE_BIN "$APP_DIR/index.js" >> "$APP_DIR/run.log" 2>&1 &
@@ -741,6 +793,8 @@ Environment=TUIC_PORT=$NEW_TUIC_PORT
 Environment=REALITY_PORT=$NEW_REALITY_PORT
 Environment=REALITY_DOMAIN=$NEW_REALITY_DOMAIN
 Environment=SS_PORT=$NEW_SS_PORT
+Environment=S5_PORT=$NEW_S5_PORT
+Environment=ANYTLS_PORT=$NEW_ANYTLS_PORT
 Environment=DISABLE_ARGO=$NEW_DISABLE_ARGO
 ExecStart=$NODE_BIN $APP_DIR/index.js
 Restart=always
@@ -795,6 +849,8 @@ export TUIC_PORT="$INPUT_TUIC_PORT"
 export REALITY_PORT="$INPUT_REALITY_PORT"
 export REALITY_DOMAIN="$INPUT_REALITY_DOMAIN"
 export SS_PORT="$INPUT_SS_PORT"
+export S5_PORT="$INPUT_S5_PORT"
+export ANYTLS_PORT="$INPUT_ANYTLS_PORT"
 export DISABLE_ARGO="$INPUT_DISABLE_ARGO"
 cd "$APP_DIR"
 nohup $NODE_BIN "$APP_DIR/index.js" >> "$APP_DIR/run.log" 2>&1 &
@@ -831,6 +887,8 @@ Environment=TUIC_PORT=$INPUT_TUIC_PORT
 Environment=REALITY_PORT=$INPUT_REALITY_PORT
 Environment=REALITY_DOMAIN=$INPUT_REALITY_DOMAIN
 Environment=SS_PORT=$INPUT_SS_PORT
+Environment=S5_PORT=$INPUT_S5_PORT
+Environment=ANYTLS_PORT=$INPUT_ANYTLS_PORT
 Environment=DISABLE_ARGO=$INPUT_DISABLE_ARGO
 ExecStart=$NODE_BIN $APP_DIR/index.js
 Restart=always
