@@ -14,8 +14,8 @@ const PRESET_TUIC_PORT      = '';
 const PRESET_REALITY_PORT   = '';
 const PRESET_REALITY_DOMAIN = '';
 const PRESET_SS_PORT        = '';
-const PRESET_S5_PORT        = '';     // 新增：Socks5 端口
-const PRESET_ANYTLS_PORT    = '';     // 新增：AnyTLS 端口
+const PRESET_S5_PORT        = '';
+const PRESET_ANYTLS_PORT    = '';
 // =============================================
 
 const { execSync, spawn } = require('child_process');
@@ -111,8 +111,7 @@ function deriveSSPassword(uuid) {
 }
 
 // ──────────────────────────────────────────────
-// 自签证书：每个部署实例都生成独一无二的密钥，
-// 不再使用任何写死在源码里的共享私钥兜底
+// 自签证书：每个部署实例都生成独一无二的密钥
 // ──────────────────────────────────────────────
 
 function generateSelfSignedCert(dir) {
@@ -123,7 +122,7 @@ function generateSelfSignedCert(dir) {
   }
   fs.mkdirSync(dir, { recursive: true });
 
-  // 优先用系统 openssl 生成（跨平台都可能装有，速度快）
+  // 优先用系统 openssl 生成
   try {
     execSync(
       `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -days 3650 -nodes` +
@@ -211,7 +210,9 @@ async function downloadSingBox() {
 
   console.log(`正在获取 sing-box 最新版本 (${platform}-${arch})...`);
 
-  let version = 'v1.11.6';
+  // 兜底版本必须 >= 1.12.0，否则 AnyTLS 协议类型无法被识别，
+  // sing-box 会在配置校验阶段整体拒绝启动（影响全部协议，不仅是AnyTLS）
+  let version = 'v1.13.13';
   try {
     const data = await httpGet('https://api.github.com/repos/SagerNet/sing-box/releases');
     if (data) {
@@ -368,15 +369,15 @@ async function main() {
   const TUIC_PORT_RAW    = PRESET_TUIC_PORT    || process.env.TUIC_PORT    || '';
   const REALITY_PORT_RAW = PRESET_REALITY_PORT || process.env.REALITY_PORT || '';
   const SS_PORT_RAW      = PRESET_SS_PORT      || process.env.SS_PORT      || '';
-  const S5_PORT_RAW      = PRESET_S5_PORT      || process.env.S5_PORT      || '';      // 新增
-  const ANYTLS_PORT_RAW  = PRESET_ANYTLS_PORT  || process.env.ANYTLS_PORT  || '';      // 新增
+  const S5_PORT_RAW      = PRESET_S5_PORT      || process.env.S5_PORT      || '';
+  const ANYTLS_PORT_RAW  = PRESET_ANYTLS_PORT  || process.env.ANYTLS_PORT  || '';
 
   const HY2_PORT     = HY2_PORT_RAW     ? parseInt(HY2_PORT_RAW)     : 0;
   const TUIC_PORT    = TUIC_PORT_RAW    ? parseInt(TUIC_PORT_RAW)    : 0;
   const REALITY_PORT = REALITY_PORT_RAW ? parseInt(REALITY_PORT_RAW) : 0;
   const SS_PORT      = SS_PORT_RAW      ? parseInt(SS_PORT_RAW)      : 0;
-  const S5_PORT       = S5_PORT_RAW     ? parseInt(S5_PORT_RAW)      : 0;               // 新增
-  const ANYTLS_PORT   = ANYTLS_PORT_RAW ? parseInt(ANYTLS_PORT_RAW)  : 0;               // 新增
+  const S5_PORT       = S5_PORT_RAW     ? parseInt(S5_PORT_RAW)      : 0;
+  const ANYTLS_PORT   = ANYTLS_PORT_RAW ? parseInt(ANYTLS_PORT_RAW)  : 0;
 
   const REALITY_DOMAIN = PRESET_REALITY_DOMAIN || process.env.REALITY_DOMAIN || 'www.iij.ad.jp';
 
@@ -460,8 +461,8 @@ async function main() {
   const tuicActive    = portOk(TUIC_PORT,    'udp');
   const realityActive = portOk(REALITY_PORT, 'tcp');
   const ssActive      = portOk(SS_PORT,      'tcp');
-  const s5Active      = portOk(S5_PORT,      'tcp');   // 新增
-  const anytlsActive  = portOk(ANYTLS_PORT,  'tcp');   // 新增
+  const s5Active      = portOk(S5_PORT,      'tcp');
+  const anytlsActive  = portOk(ANYTLS_PORT,  'tcp');
 
   if (HY2_PORT     && !hy2Active)     console.warn(`警告: HY2_PORT(${HY2_PORT}) 端口冲突或无效，Hysteria2 已跳过`);
   if (TUIC_PORT    && !tuicActive)    console.warn(`警告: TUIC_PORT(${TUIC_PORT}) 端口冲突或无效，TUIC 已跳过`);
@@ -656,6 +657,40 @@ async function main() {
 
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 
+  // 打印实际拿到的 sing-box 版本，方便排查"协议不支持"类问题
+  try {
+    const verOut = execSync(`"${sbBin}" version`, { encoding: 'utf8' });
+    console.log('sing-box 版本信息:\n' + verOut.trim());
+  } catch (e) {
+    console.warn(`无法获取 sing-box 版本信息: ${e.message}`);
+  }
+
+  // 启动前先做一次配置校验。sing-box 对配置文件是整体原子校验的——
+  // 任何一个 inbound 类型不被当前版本识别，都会导致进程拒绝启动，
+  // 进而连累所有协议（包括 Argo 转发依赖的 vmess/vless/trojan）。
+  // 提前 check 可以在真正启动前就发现问题，并把错误打印出来，
+  // 而不是让 sing-box 静默崩溃、什么日志都看不到。
+  const SB_LOG_FILE = `${SB_DIR}/run.log`;
+  try {
+    execSync(`"${sbBin}" check -c "${CONFIG_FILE}"`, { encoding: 'utf8', stdio: 'pipe' });
+    console.log('sing-box 配置校验通过');
+  } catch (e) {
+    const detail = (e.stdout || '') + (e.stderr || '') + e.message;
+    console.error('================ sing-box 配置校验失败 ================');
+    console.error(detail.trim());
+    console.error('========================================================');
+    console.error(
+      '常见原因：当前 sing-box 版本过旧，不支持某个已启用的协议类型' +
+      '（例如 AnyTLS 需要 sing-box >= 1.12.0）。' +
+      '请删除本地 sing-box 二进制后重新运行脚本以下载最新版本，' +
+      '或关闭对应协议端口变量后重试。'
+    );
+    fs.writeFileSync(SB_LOG_FILE, `[CONFIG CHECK FAILED]\n${detail}\n`);
+    console.log(`详细日志已写入: ${SB_LOG_FILE}`);
+    console.log('配置校验未通过，跳过启动 sing-box（Argo/HTTP订阅服务仍会继续运行）。');
+    global.SB_START_FAILED = true;
+  }
+
   try {
     if (os.platform() !== 'win32') {
       execSync(`pkill -f "${SB_BIN_PATH}" 2>/dev/null || true`);
@@ -666,13 +701,24 @@ async function main() {
   const sbEnv = { ...process.env };
   delete sbEnv.PORT;
 
-  const sb = spawn(sbBin, ['run', '-c', CONFIG_FILE], {
-    stdio: 'ignore',
-    detached: os.platform() !== 'win32',
-    env: sbEnv
-  });
-  sb.unref();
-  console.log(`sing-box 已在后台启动，PID: ${sb.pid}`);
+  if (!global.SB_START_FAILED) {
+    // 不再用 stdio: 'ignore' 丢弃输出，改为写入日志文件，
+    // 这样在翼龙/Pterodactyl 等只能看面板日志的环境下，
+    // sing-box 启动失败时也能看到具体报错原因。
+    const sbLogFd = fs.openSync(SB_LOG_FILE, 'a');
+    const sb = spawn(sbBin, ['run', '-c', CONFIG_FILE], {
+      stdio: ['ignore', sbLogFd, sbLogFd],
+      detached: os.platform() !== 'win32',
+      env: sbEnv
+    });
+    sb.unref();
+    console.log(`sing-box 已在后台启动，PID: ${sb.pid}`);
+    console.log(`运行日志: ${SB_LOG_FILE}`);
+
+    sb.on('error', (err) => {
+      console.error(`sing-box 进程启动失败: ${err.message}`);
+    });
+  }
 
   await new Promise(r => setTimeout(r, 1500));
 
@@ -812,7 +858,7 @@ async function main() {
   if (anytlsFinal && PUBLIC_IP) {
     links.push(
       `anytls://${UUID}@${PUBLIC_IP}:${ANYTLS_PORT}` +
-      `?security=tls&sni=${PUBLIC_IP}&fp=chrome&insecure=1&allowInsecure=1` +
+      `?security=tls&sni=www.bing.com&fp=chrome&insecure=1&allowInsecure=1` +
       `#${encodeURIComponent(NAME)}`
     );
   }
