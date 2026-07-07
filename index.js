@@ -356,6 +356,9 @@ function startArgoTunnel(cfBin, argoPort, argoDomain, argoAuth) {
           resolve(argoHost);
         }
       });
+      // stdout 没有业务上需要读的内容，但挂一个空监听持续读空它，
+      // 避免 cloudflared 长期运行、没人读 stdout 导致管道缓冲区被写满而卡住写入。
+      cf.stdout.on('data', () => {});
       cf.on('error', err => console.error('cloudflared error:', err));
       setTimeout(() => {
         if (!argoHost) { console.log('临时隧道域名获取超时'); resolve(''); }
