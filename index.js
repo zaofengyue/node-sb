@@ -16,23 +16,28 @@ const PRESET_REALITY_DOMAIN = '';
 const PRESET_SS_PORT        = '';
 const PRESET_S5_PORT        = '';
 const PRESET_ANYTLS_PORT    = '';
+// ── 填 '0'/'false'/'no' 关闭部署完成后的清理动作，留空即默认开启 ──
+const PRESET_CLEANUP_AFTER_DEPLOY = '';
 // =============================================
 
 const { execSync, spawn } = require('child_process');
 const fs     = require('fs');
 const os     = require('os');
+const path   = require('path');
 const https  = require('https');
 const http   = require('http');
 const crypto = require('crypto');
 const net    = require('net');
 
 const HOME            = process.env.HOME || os.tmpdir();
-const UUID_FILE       = `${HOME}/uuid.txt`;
-const CONFIG_FILE     = `${HOME}/sb-config.json`;
-const SB_DIR          = `${HOME}/sing-box`;
+// 运行期生成的所有文件统一放进这一个目录，不再散落在 $HOME 和当前工作目录两处
+const WORLD_DIR        = `${HOME}/world`;
+const UUID_FILE       = `${WORLD_DIR}/uuid.txt`;
+const CONFIG_FILE     = `${WORLD_DIR}/sb-config.json`;
+const SB_DIR          = `${WORLD_DIR}/sing-box`;
 const SB_BIN_NAME     = os.platform() === 'win32' ? 'sing-box.exe' : 'sing-box';
 const SB_BIN_PATH     = `${SB_DIR}/${SB_BIN_NAME}`;
-const CLOUDFLARED_BIN = `${HOME}/cloudflared${os.platform() === 'win32' ? '.exe' : ''}`;
+const CLOUDFLARED_BIN = `${WORLD_DIR}/cloudflared${os.platform() === 'win32' ? '.exe' : ''}`;
 
 // Argo 三协议 WS 路径
 const WS_PATH_VMESS  = '/fengyue-vm';
@@ -229,7 +234,7 @@ async function downloadSingBox() {
   const url = `https://github.com/SagerNet/sing-box/releases/download/${version}/${tarName}`;
 
   fs.mkdirSync(SB_DIR, { recursive: true });
-  const tarPath = `${HOME}/sb.${ext}`;
+  const tarPath = `${WORLD_DIR}/sb.${ext}`;
   console.log('正在下载 sing-box...');
   await download(url, tarPath);
 
@@ -278,21 +283,65 @@ async function downloadCloudflared() {
 // Argo 隧道
 // ──────────────────────────────────────────────
 
+// 固定隧道成功/失败的判定正则：cloudflared 连接成功时会打印类似
+// "Registered tunnel connection" 的日志；token 无效/网络异常时
+// 通常会打印明确的错误信息，或者进程直接退出。
+const TUNNEL_CONNECTED_PATTERN = /registered tunnel connection/i;
+const TUNNEL_ERROR_PATTERN = /(failed to |unable to |unauthorized|context canceled|connection refused)/i;
+
 function startArgoTunnel(cfBin, argoPort, argoDomain, argoAuth) {
   return new Promise((resolve) => {
-    let argoHost = '';
-
     if (argoDomain && argoAuth) {
       console.log('启动固定 Argo 隧道...');
       const cf = spawn(cfBin, [
         'tunnel', '--edge-ip-version', 'auto', '--no-autoupdate',
         'run', '--token', argoAuth
       ], { stdio: 'pipe' });
-      cf.on('error', err => console.error('cloudflared error:', err));
-      argoHost = argoDomain;
-      setTimeout(() => resolve(argoHost), 3000);
+
+      let settled = false;
+      const onData = (data) => {
+        if (settled) return;
+        const str = data.toString();
+        if (TUNNEL_CONNECTED_PATTERN.test(str)) {
+          settled = true;
+          console.log('固定 Argo 隧道连接成功');
+          resolve(argoDomain);
+        } else if (TUNNEL_ERROR_PATTERN.test(str)) {
+          settled = true;
+          console.warn('固定 Argo 隧道未能连接（token 可能无效或网络异常），跳过该域名，生成的节点将使用占位域名');
+          resolve('');
+        }
+      };
+      cf.stdout.on('data', onData);
+      cf.stderr.on('data', onData);
+
+      cf.on('error', (err) => {
+        if (!settled) {
+          settled = true;
+          console.error('cloudflared error:', err);
+          resolve('');
+        }
+      });
+      cf.on('exit', (code) => {
+        if (!settled) {
+          settled = true;
+          console.warn(`固定 Argo 隧道进程提前退出（code=${code}），token 可能无效，跳过该域名`);
+          resolve('');
+        }
+      });
+
+      // 10 秒内既没看到明确成功日志、进程也还活着——给出保守提示但仍然使用配置的域名，
+      // 避免因为日志格式跟预期不一致（不同 cloudflared 版本用词可能有差异）而误判为失败
+      setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          console.warn('未在 10 秒内确认固定 Argo 隧道的连接状态，继续使用配置的 ARGO_DOMAIN 生成链接，请自行确认隧道是否正常连通');
+          resolve(argoDomain);
+        }
+      }, 10000);
     } else {
       console.log('启动临时 Argo 隧道...');
+      let argoHost = '';
       const cf = spawn(cfBin, [
         'tunnel', '--edge-ip-version', 'auto', '--no-autoupdate',
         '--url', `http://127.0.0.1:${argoPort}`
@@ -326,10 +375,48 @@ async function getPublicIP() {
 }
 
 // ──────────────────────────────────────────────
+// 部署后清理
+// ──────────────────────────────────────────────
+
+// 清理部署完成后不再需要的附带文件，减少 world 目录体积。
+// 只清理明确用不到的内容，不会碰持久化文件（uuid.txt/sb-config.json/sub.txt/
+// reality-keys.json/certs/）或运行必需的二进制本身：
+//   - sing-box 官方发行包里附带的 LICENSE/README/CHANGELOG 等说明文件
+//   - 残留的下载临时文件（正常流程已经删过，这里做兜底）
+function cleanupDeployArtifacts() {
+  const removed = [];
+
+  for (const name of ['sb.tar.gz', 'sb.zip']) {
+    const p = `${WORLD_DIR}/${name}`;
+    if (fs.existsSync(p)) {
+      try { fs.unlinkSync(p); removed.push(name); } catch {}
+    }
+  }
+
+  const unusedNames = ['LICENSE', 'LICENSE.txt', 'README.md', 'README', 'CHANGELOG.md', 'CHANGELOG'];
+  if (fs.existsSync(SB_DIR)) {
+    for (const name of unusedNames) {
+      const p = path.join(SB_DIR, name);
+      if (fs.existsSync(p) && p !== SB_BIN_PATH) {
+        try { fs.unlinkSync(p); removed.push(name); } catch {}
+      }
+    }
+  }
+
+  if (removed.length) {
+    console.log(`cleanup: removed unused file(s): ${removed.join(', ')}`);
+  } else {
+    console.log('cleanup: nothing to remove');
+  }
+}
+
+// ──────────────────────────────────────────────
 // 主流程
 // ──────────────────────────────────────────────
 
 async function main() {
+  fs.mkdirSync(WORLD_DIR, { recursive: true });
+
   const DISABLE_ARGO = PRESET_DISABLE_ARGO === 'true' || process.env.DISABLE_ARGO === 'true';
 
   // UUID
@@ -446,8 +533,15 @@ async function main() {
   }
   if (!sbBin) sbBin = await downloadSingBox();
 
-  // ── 端口唯一性检测 ──────────────────────────────────────────────────────
+  // ── 端口唯一性检测：同时把伪装页端口 / Argo 内部端口也算进去，避免交叉冲突 ──
   const usedPorts = new Set();
+  usedPorts.add(`tcp:${INBOUND_PORT}`);
+  if (!DISABLE_ARGO) {
+    usedPorts.add(`tcp:${ARGO_PORT}`);
+    usedPorts.add(`tcp:${V_VMESS_PORT}`);
+    usedPorts.add(`tcp:${V_VLESS_PORT}`);
+    usedPorts.add(`tcp:${V_TROJAN_PORT}`);
+  }
   function portOk(p, proto) {
     if (!p || isNaN(p)) return false;
     const n = parseInt(p);
@@ -459,7 +553,7 @@ async function main() {
   }
   const hy2Active     = portOk(HY2_PORT,     'udp');
   const tuicActive    = portOk(TUIC_PORT,    'udp');
-  const realityActive = portOk(REALITY_PORT, 'tcp');
+  let   realityActive = portOk(REALITY_PORT, 'tcp');
   const ssActive      = portOk(SS_PORT,      'tcp');
   const s5Active      = portOk(S5_PORT,      'tcp');
   const anytlsActive  = portOk(ANYTLS_PORT,  'tcp');
@@ -477,7 +571,7 @@ async function main() {
   let certReady = false;
   if (hy2Active || tuicActive || anytlsActive) {
     try {
-      const certDir = `${HOME}/certs`;
+      const certDir = `${WORLD_DIR}/certs`;
       const cert = generateSelfSignedCert(certDir);
       certPath = cert.certPath;
       keyPath  = cert.keyPath;
@@ -539,7 +633,7 @@ async function main() {
   if (realityActive) {
     console.log(`启用 VLESS Reality，端口 ${REALITY_PORT}`);
 
-    const realityKeyFile = `${HOME}/reality-keys.json`;
+    const realityKeyFile = `${WORLD_DIR}/reality-keys.json`;
     let realityPrivKey = '', realityPubKey = '';
 
     if (fs.existsSync(realityKeyFile)) {
@@ -580,25 +674,32 @@ async function main() {
       }
     }
 
-    global.REALITY_PUB_KEY = realityPubKey;
+    // 密钥生成失败（还是空）就直接跳过这个协议，不要把空私钥写进 sing-box 配置里
+    // 指望 sing-box check 兜底——那样问题要等到校验阶段才会暴露。
+    if (!realityPrivKey || !realityPubKey) {
+      console.warn('Reality 密钥生成失败，VLESS Reality 已跳过');
+      realityActive = false;
+    } else {
+      global.REALITY_PUB_KEY = realityPubKey;
 
-    inbounds.push({
-      type: 'vless',
-      tag: 'reality-in',
-      listen: '::',
-      listen_port: parseInt(REALITY_PORT),
-      users: [{ uuid: UUID, flow: 'xtls-rprx-vision' }],
-      tls: {
-        enabled: true,
-        server_name: REALITY_DOMAIN,
-        reality: {
+      inbounds.push({
+        type: 'vless',
+        tag: 'reality-in',
+        listen: '::',
+        listen_port: parseInt(REALITY_PORT),
+        users: [{ uuid: UUID, flow: 'xtls-rprx-vision' }],
+        tls: {
           enabled: true,
-          handshake: { server: REALITY_DOMAIN, server_port: 443 },
-          private_key: realityPrivKey,
-          short_id: ['']
+          server_name: REALITY_DOMAIN,
+          reality: {
+            enabled: true,
+            handshake: { server: REALITY_DOMAIN, server_port: 443 },
+            private_key: realityPrivKey,
+            short_id: ['']
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   // Shadowsocks 2022（可选，TCP）
@@ -615,7 +716,7 @@ async function main() {
     });
   }
 
-  // ───── 新增：Socks5（可选，TCP） ─────
+  // Socks5（可选，TCP）
   if (s5Active) {
     console.log(`启用 Socks5，端口 ${S5_PORT}`);
     inbounds.push({
@@ -632,7 +733,7 @@ async function main() {
     });
   }
 
-  // ───── 新增：AnyTLS（可选，TCP） ─────
+  // AnyTLS（可选，TCP）
   if (anytlsFinal) {
     console.log(`启用 AnyTLS，端口 ${ANYTLS_PORT}`);
     inbounds.push({
@@ -845,7 +946,6 @@ async function main() {
     );
   }
 
-  // ───── 新增：Socks5 订阅链接 ─────
   if (s5Active && PUBLIC_IP) {
     const s5UserInfo = Buffer.from(`${UUID.substring(0, 8)}:${UUID.slice(-12)}`).toString('base64');
     links.push(
@@ -854,7 +954,6 @@ async function main() {
     );
   }
 
-  // ───── 新增：AnyTLS 订阅链接 ─────
   if (anytlsFinal && PUBLIC_IP) {
     links.push(
       `anytls://${UUID}@${PUBLIC_IP}:${ANYTLS_PORT}` +
@@ -866,7 +965,7 @@ async function main() {
   const SUB_BASE64 = Buffer.from(links.join('\n')).toString('base64');
   global.SUB_CONTENT = SUB_BASE64;
 
-  const SUB_FILE = `${process.cwd()}/sub.txt`;
+  const SUB_FILE = `${WORLD_DIR}/sub.txt`;
   fs.writeFileSync(SUB_FILE, SUB_BASE64);
 
   console.log('================= 订阅内容 =================');
@@ -891,6 +990,12 @@ async function main() {
   if (DISABLE_ARGO)  console.log(`✗ Argo 隧道已禁用`);
   console.log(`运行环境: ${detectOS()}-${detectArch()}`);
   console.log('========================================');
+
+  const cleanupEnv = (PRESET_CLEANUP_AFTER_DEPLOY || process.env.CLEANUP_AFTER_DEPLOY || '').toLowerCase().trim();
+  const cleanupAfterDeploy = !['0', 'false', 'no'].includes(cleanupEnv);
+  if (cleanupAfterDeploy) {
+    cleanupDeployArtifacts();
+  }
 }
 
 main().catch(err => {
