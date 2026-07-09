@@ -181,9 +181,9 @@ RESET='\033[0m'
 
 APP_DIR="$HOME/node-sb"
 WRAPPER="$APP_DIR/start.sh"
-SUB_FILE="$APP_DIR/sub.txt"
+SUB_FILE="$HOME/world/sub.txt"
 LOG_FILE="$APP_DIR/run.log"
-SB_BIN="$HOME/sing-box/sing-box"
+SB_BIN="$HOME/world/sing-box/sing-box"
 
 get_val() {
   grep "^export $1=" "$WRAPPER" 2>/dev/null | sed 's/.*="\(.*\)"/\1/' | head -1
@@ -363,7 +363,7 @@ config_uuid() {
   read -r confirm
   if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
     set_val UUID "$new_uuid"
-    rm -f "$HOME/reality-keys.json"
+    rm -f "$HOME/world/reality-keys.json"
     restart_service
     echo -e "${GREEN}UUID 已更新${RESET}"
     press_any_key
@@ -512,7 +512,7 @@ config_proto() {
         read -r val
         if [ -n "$val" ]; then
           set_val REALITY_DOMAIN "$val"
-          rm -f "$HOME/reality-keys.json"
+          rm -f "$HOME/world/reality-keys.json"
           echo -e "${GREEN}已更新为: $val${RESET}"
           echo -e "${YELLOW}已清除 Reality 密钥，重启后重新生成${RESET}"
         fi
@@ -591,9 +591,9 @@ menu_update() {
       *)       arch="amd64" ;;
     esac
     local url="https://github.com/SagerNet/sing-box/releases/download/v${latest_ver}/sing-box-${latest_ver}-linux-${arch}.tar.gz"
-    local tmp="$HOME/sb_update.tar.gz"
+    local tmp="$HOME/world/sb_update.tar.gz"
     curl -sL "$url" -o "$tmp" && \
-    tar -xzf "$tmp" -C "$HOME/sing-box" --strip-components=1 && \
+    tar -xzf "$tmp" -C "$HOME/world/sing-box" --strip-components=1 && \
     chmod +x "$SB_BIN" && \
     rm -f "$tmp"
     echo -e "${GREEN}更新完成，正在重启...${RESET}"
@@ -629,7 +629,7 @@ chmod +x "$LOCAL_BIN/sb"
 
 cat > "$LOCAL_BIN/sb-sub" << 'SUBCMD'
 #!/bin/bash
-SUB_FILE="$HOME/node-sb/sub.txt"
+SUB_FILE="$HOME/world/sub.txt"
 [ -f "$SUB_FILE" ] && cat "$SUB_FILE" || echo "sub.txt 不存在，请等待服务启动完成"
 SUBCMD
 chmod +x "$LOCAL_BIN/sb-sub"
@@ -662,10 +662,7 @@ for RC in "\$HOME/.bashrc" "\$HOME/.profile" "\$HOME/.bash_profile" "\$HOME/.zsh
   sed -i '/node-sb/d'   "\$RC" 2>/dev/null || true
 done
 rm -rf "$APP_DIR"
-rm -f "\$HOME/cloudflared"
-rm -rf "\$HOME/sing-box"
-rm -f "\$HOME/uuid.txt" "\$HOME/sb-config.json" "\$HOME/reality-keys.json"
-rm -rf "\$HOME/certs"
+rm -rf "\$HOME/world"
 rm -f "$LOCAL_BIN/sb" "$LOCAL_BIN/sb-sub" "$LOCAL_BIN/sb-log" "$LOCAL_BIN/sb-del" "$LOCAL_BIN/sb-edit"
 echo "删除完成"
 DELCMD
