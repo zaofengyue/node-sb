@@ -106,7 +106,7 @@ cd node-sb && node index.js
 | `SUB` | 订阅路径 | `sub`（即 `/sub`） |
 | `ARGO_DOMAIN` | 固定隧道域名 | 空则使用临时隧道 |
 | `ARGO_AUTH` | 固定隧道 Token | 空则使用临时隧道 |
-| `DISABLE_ARGO` | 填 `true` 禁用 Argo 隧道（VMess/VLESS/Trojan 三协议），只保留下面的可选协议 | 留空即启用 |
+| `DISABLE_ARGO` | 填 `true` 禁用 Argo 隧道 | 留空即启用 |
 | `CLEANUP_AFTER_DEPLOY` | 部署成功、生成订阅后是否自动清理 sing-box 发行包里用不到的附带文件，设为 `0`/`false`/`no` 可关闭 | `true` |
 
 ### 可选协议变量
@@ -121,10 +121,6 @@ cd node-sb && node index.js
 | `S5_PORT` | Socks5 | 设置端口启用，需开放 TCP |
 | `ANYTLS_PORT` | AnyTLS | 设置端口启用，需开放 TCP，需要 sing-box ≥ 1.12.0 |
 
-> Hysteria2 / TUIC / AnyTLS 使用自签证书，客户端需开启跳过证书验证。
-> Reality 密钥对自动生成并持久化，重启后 PublicKey 不变。
-> Shadowsocks 密码由 UUID 自动派生，加密方式 `2022-blake3-aes-128-gcm`。
-> Socks5 账号/密码分别取自 UUID 前 8 位和末 12 位，AnyTLS 密码直接使用 UUID。
 
 ---
 
