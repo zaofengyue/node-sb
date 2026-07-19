@@ -164,7 +164,7 @@ menu_config() {
   done
 }
 
-# ── 修改 UUID（三级）────────────────────────────────────────────────────────
+# ── 修改 UUID ────────────────────────────────────────────────────────────────
 config_uuid() {
   clear
   echo -e "${GREEN}======= 修改 UUID =======${RESET}"
@@ -199,7 +199,7 @@ config_uuid() {
   fi
 }
 
-# ── Argo 隧道模式（三级）────────────────────────────────────────────────────
+# ── Argo 隧道模式 ────────────────────────────────────────────────────────────
 config_argo() {
   while true; do
     clear
@@ -280,7 +280,7 @@ config_argo() {
   done
 }
 
-# ── 可选协议端口（三级）─────────────────────────────────────────────────────
+# ── 可选协议端口 ─────────────────────────────────────────────────────────────
 config_proto() {
   while true; do
     clear
@@ -421,7 +421,26 @@ menu_update() {
     esac
     local url="https://github.com/SagerNet/sing-box/releases/download/v${latest_ver}/sing-box-${latest_ver}-linux-${arch}.tar.gz"
     local tmp="$HOME/world/sb_update.tar.gz"
-    curl -sL "$url" -o "$tmp" && \
+
+    # 多源下载，依次尝试直连和镜像
+    local downloaded=false
+    for mirror in \
+      "$url" \
+      "https://ghproxy.net/$url" \
+      "https://gh.idayer.com/$url" \
+      "https://mirror.ghproxy.com/$url"; do
+      if curl -fsSL "$mirror" -o "$tmp" 2>/dev/null || wget -q "$mirror" -O "$tmp" 2>/dev/null; then
+        downloaded=true
+        break
+      fi
+      echo -e "${YELLOW}下载失败，尝试下一个源...${RESET}"
+    done
+
+    if ! $downloaded; then
+      echo -e "${RED}所有下载源均失败，更新取消${RESET}"
+      press_any_key; return
+    fi
+
     tar -xzf "$tmp" -C "$HOME/world/sing-box" --strip-components=1 && \
     chmod +x "$SB_BIN" && \
     rm -f "$tmp"
